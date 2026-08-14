@@ -43,6 +43,7 @@ export type Player = {
   id: string
   name: string
   score: number
+  seenAt?: number
 }
 
 export type Guess = {
