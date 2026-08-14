@@ -6,4 +6,8 @@ export default defineConfig({
   // Relative asset paths keep this template portable for GitHub Pages project sites.
   base: './',
   plugins: [react()],
+  server: {
+    host: true,
+    port: 5173,
+  },
 })

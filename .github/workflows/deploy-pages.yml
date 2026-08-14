@@ -32,6 +32,8 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_PARTYKIT_HOST: artists.sethhyatt8.partykit.dev
         run: npm run build
 
       - name: Upload Pages artifact

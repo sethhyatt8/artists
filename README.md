@@ -1,59 +1,44 @@
-# Cursor Web App Template
+# Artists
 
-Starter template for static web apps deployed to GitHub Pages with:
+Collage-and-guess party game. This first slice is the reusable room layer: create a room, share a code, each player joins on their own device.
 
-- React
-- Vite
-- TypeScript
-- ESLint
-- `gh-pages` deployment script
-- GitHub Actions Pages deployment workflow
+Stack: React + Vite + TypeScript on GitHub Pages, with a PartyKit room server for live sync.
 
-## Quick start (for a new app)
-
-1. Clone this template repository.
-2. Rename the folder/repository for your app.
-3. Install dependencies:
+## Run locally
 
 ```bash
 npm install
-```
-
-4. Start development:
-
-```bash
 npm run dev
 ```
 
-## Deploy to GitHub Pages
+That starts the web app and the room server together.
 
-This template includes:
+- Web: http://localhost:5173
+- Rooms: `localhost:1999`
 
-- `predeploy`: `npm run build`
-- `deploy`: `gh-pages -d dist`
+Open the site on your laptop and on phones on the same Wi-Fi using your computer’s LAN address (Vite prints it). Each device can create or join with the room code. No player accounts.
 
-To deploy:
+To confirm devices can see each other: create a room, start a ready check, tap **I’m ready** on every phone.
+
+## Play on the internet
+
+Two deploys:
+
+1. **Web app** — GitHub Pages (already wired in `.github/workflows/deploy-pages.yml`).
+2. **Room server** — once, from this machine:
 
 ```bash
-npm run deploy
+npx partykit login --provider github
+npm run deploy:rooms
 ```
 
-`vite.config.ts` uses `base: './'` so the built app remains portable for GitHub Pages project hosting.
+Only you log in. Everyone else just opens the site and types the room code.
 
-For automatic deploys, this template also includes `.github/workflows/deploy-pages.yml`, which publishes on pushes to `main`.
+The production room host is `artists.sethhyatt8.partykit.dev` (see `.env.production`). If your GitHub username for PartyKit is different, update that file and the Pages workflow env.
 
-## One-time Cursor setup (important)
+## Scripts
 
-Repository rules can guide agent behavior, but frequent run-approval prompts are controlled by your Cursor permissions mode.
-
-In Cursor:
-
-1. Open Agent settings and set approval mode to `allowlist` (or a less strict mode you are comfortable with).
-2. Expand your allowlist to include normal dev commands (for example: `npm install`, `npm run *`, `npx vite`, `git status`, `git diff`, `git log`).
-3. Keep destructive commands requiring approval (for example: `rm -rf`, `git reset --hard`, force pushes).
-
-After this one-time setup, cloned repos using this template should run with far fewer interruptions.
-
-## Template intent
-
-This repo is intentionally minimal and cloneable so you can quickly start new apps (for example, a darts scoring app) while keeping consistent tooling and agent behavior defaults.
+- `npm run dev` — web + rooms
+- `npm run build` / `npm run lint`
+- `npm run deploy` — GitHub Pages via `gh-pages`
+- `npm run deploy:rooms` — PartyKit
