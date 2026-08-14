@@ -1,0 +1,33 @@
+---
+description: Collaboration, architecture, workflow, and safety defaults for this repository template
+alwaysApply: true
+---
+
+# Repository Defaults
+
+## Collaboration
+
+- Keep collaboration interactive: ask concise clarifying questions when needed, discuss options, and use plan mode when useful.
+- For normal implementation requests, run necessary commands/tools without step-by-step approval prompts.
+- Only pause for explicit confirmation before risky or destructive actions.
+
+## Architecture
+
+- Build static web apps compatible with GitHub Pages.
+- Preferred stack: React + Vite + TypeScript.
+- Keep deployment ready with:
+  - `predeploy`: `npm run build`
+  - `deploy`: `gh-pages -d dist`
+- Configure Vite for GitHub Pages hosting (set base path appropriately for repo deployment).
+
+## Workflow
+
+- Use plan/discussion first when requests are broad or ambiguous.
+- After plan approval, execute end-to-end with minimal interruption.
+- Run lint and build checks after substantive changes.
+- If blocked by missing external info (for example, repository URL), ask concise questions and continue immediately.
+
+## Safety
+
+- Never run destructive git commands unless explicitly requested.
+- Surface important risks before high-impact actions.
