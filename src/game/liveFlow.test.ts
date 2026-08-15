@@ -85,5 +85,31 @@ await new Promise((resolve) => setTimeout(resolve, 2500))
 const still = normalizeStoredRoom(await get(`rooms/${code}`))
 assert(still?.phase === 'drawing', `room left drawing after 2.5s, now ${still?.phase}`)
 
+const piece = {
+  id: 'piece-live',
+  kind: 'circle',
+  x: 500,
+  y: 500,
+  width: 80,
+  height: 80,
+  rotation: 0,
+  color: '#e07a3d',
+}
+await put(`rooms/${code}/pieces`, [piece])
+
+const afterPiece = normalizeStoredRoom(await get(`rooms/${code}`))
+assert(afterPiece, `room missing after piece write: ${JSON.stringify(await get(`rooms/${code}`))}`)
+assert(
+  afterPiece.phase === 'drawing',
+  `piece write ended the turn: phase=${afterPiece.phase}`,
+)
+assert(afterPiece.prompt === 'pizza', 'piece write dropped the prompt')
+assert(afterPiece.artistId === host, `piece write dropped artist, now ${afterPiece.artistId}`)
+assert(
+  typeof afterPiece.deadlineMs === 'number' && afterPiece.deadlineMs > Date.now() + 1000,
+  `piece write dropped the deadline, got ${afterPiece.deadlineMs}`,
+)
+assert(afterPiece.pieces.some((item) => item.id === 'piece-live'), 'piece did not persist')
+
 await put(`rooms/${code}`, null)
 console.log(`live Firebase flow passed for room ${code}`)

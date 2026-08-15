@@ -3,6 +3,7 @@ import {
   addPlayer,
   applyMessage,
   emptyRoom,
+  isSpuriousDrawEnd,
   roomPatch,
   toRoomState,
   type StoredRoom,
@@ -73,6 +74,15 @@ const expired = unwrap(
   ),
 )
 assert(expired.phase === 'reveal', 'timesUp after the deadline should reveal')
+
+assert(
+  isSpuriousDrawEnd(room, expired) === false,
+  'a real expired timesUp must be allowed to reveal',
+)
+assert(
+  isSpuriousDrawEnd(room, { ...room, phase: 'reveal' }),
+  'reveal without expiry, a winner, or a saved collage must not kill the collage',
+)
 
 room = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
 assert(room.phase === 'reveal', `expected reveal, got ${room.phase}`)

@@ -127,17 +127,46 @@ function getAt(root: unknown, path: string): unknown {
   return cursor
 }
 
+function isPlausibleRoom(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const phase = (value as { phase?: unknown }).phase
+  return (
+    phase === 'lobby' ||
+    phase === 'picking' ||
+    phase === 'drawing' ||
+    phase === 'reveal' ||
+    phase === 'voting' ||
+    phase === 'finale'
+  )
+}
+
 export function rtdbListen(path: string, onData: (data: unknown) => void): () => void {
   const source = new EventSource(urlFor(path))
   let tree: unknown = null
+  let stopped = false
+
+  function emit(next: unknown) {
+    if (stopped) return
+    if (next == null || isPlausibleRoom(next)) {
+      tree = next
+      onData(next)
+      return
+    }
+    void rtdbGet(path)
+      .then(({ data }) => {
+        if (stopped) return
+        tree = data
+        onData(data)
+      })
+      .catch(() => undefined)
+  }
 
   source.addEventListener('put', (event) => {
     const payload = JSON.parse((event as MessageEvent).data) as {
       path: string
       data: unknown
     }
-    tree = setAt(tree, payload.path, payload.data)
-    onData(tree)
+    emit(setAt(tree, payload.path, payload.data))
   })
 
   source.addEventListener('patch', (event) => {
@@ -145,13 +174,15 @@ export function rtdbListen(path: string, onData: (data: unknown) => void): () =>
       path: string
       data: Record<string, unknown>
     }
-    tree = patchAt(tree, payload.path, payload.data ?? {})
-    onData(tree)
+    emit(patchAt(tree, payload.path, payload.data ?? {}))
   })
 
   source.onerror = () => {
     // EventSource retries automatically.
   }
 
-  return () => source.close()
+  return () => {
+    stopped = true
+    source.close()
+  }
 }

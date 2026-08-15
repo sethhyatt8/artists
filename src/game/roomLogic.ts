@@ -281,6 +281,16 @@ function turnHasExpired(room: StoredRoom) {
   return false
 }
 
+export function isSpuriousDrawEnd(prev: StoredRoom, next: StoredRoom) {
+  if (prev.phase !== 'drawing') return false
+  if (next.phase === 'drawing') return false
+  if (next.winnerName) return false
+  if (winningGuess(prev) || winningGuess(next)) return false
+  if (turnHasExpired(prev)) return false
+  if (next.collages.length > prev.collages.length) return false
+  return true
+}
+
 const ROOM_KEYS: (keyof StoredRoom)[] = [
   'phase',
   'hostId',

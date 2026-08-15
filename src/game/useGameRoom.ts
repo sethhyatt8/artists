@@ -4,6 +4,7 @@ import {
   addPlayer,
   applyMessage,
   emptyRoom,
+  isSpuriousDrawEnd,
   normalizeStoredRoom,
   playerCount,
   playerRecord,
@@ -37,6 +38,7 @@ export function useGameRoom(session: RoomSession) {
   const selfId = useRef(tabId())
   const sessionRef = useRef(session)
   const latestState = useRef<RoomState | null>(null)
+  const latestRoom = useRef<StoredRoom | null>(null)
 
   useEffect(() => {
     sessionRef.current = session
@@ -56,14 +58,23 @@ export function useGameRoom(session: RoomSession) {
     let stopped = false
     let heartbeat: number | null = null
     const healed = new Set<string>()
+    latestRoom.current = null
 
     function writeSelf() {
       return rtdbPatch(`${path}/players/${id}`, { id, name, seenAt: Date.now() })
     }
 
     const stopListen = rtdbListen(path, (data) => {
-      const room = normalizeStoredRoom(data)
+      let room = normalizeStoredRoom(data)
       if (!room) return
+      const previous = latestRoom.current
+      if (previous && isSpuriousDrawEnd(previous, room)) {
+        room = {
+          ...previous,
+          pieces: room.pieces.length > 0 ? room.pieces : previous.pieces,
+        }
+      }
+      latestRoom.current = room
       if (!room.players[id] || !room.players[id]?.name) {
         const key = `${id}-heal`
         if (!healed.has(key)) {
@@ -162,7 +173,8 @@ export function useGameRoom(session: RoomSession) {
       if (latestState.current?.phase !== 'drawing' || latestState.current.artistId !== id) {
         return
       }
-      void rtdbSet(`${path}/pieces`, message.pieces)
+      const record = Object.fromEntries(message.pieces.map((piece) => [piece.id, piece]))
+      void rtdbSet(`${path}/pieces`, Object.keys(record).length > 0 ? record : null)
       return
     }
 

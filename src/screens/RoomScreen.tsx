@@ -52,12 +52,16 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     return () => window.clearTimeout(timer)
   }, [copied])
 
+  const turnKey = `${state?.round ?? 0}:${state?.artistId ?? ''}:${state?.prompt ?? ''}`
+  const lastTurnKey = useRef('')
+
   useEffect(() => {
-    if (state?.phase === 'drawing' && isArtist) {
-      setPieces([])
-      latestPieces.current = []
-    }
-  }, [state?.phase, state?.artistId, isArtist])
+    if (state?.phase !== 'drawing' || !isArtist) return
+    if (lastTurnKey.current === turnKey) return
+    lastTurnKey.current = turnKey
+    setPieces([])
+    latestPieces.current = []
+  }, [turnKey, state?.phase, isArtist])
 
   useEffect(() => {
     if (state?.phase === 'drawing') return
@@ -65,13 +69,18 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }, [state?.phase])
 
   useEffect(() => {
-    if (state?.phase !== 'drawing' || timesUpSent.current) return
-    if (state.winnerName || state.guesses.some((guess) => guess.correct)) return
-    if (typeof state.deadlineMs !== 'number') return
-    if (Date.now() + 1500 < state.deadlineMs) return
-    timesUpSent.current = true
-    send({ type: 'timesUp' })
-  }, [seconds, state, send])
+    if (state?.phase !== 'drawing' || typeof state.deadlineMs !== 'number') return
+    const deadline = state.deadlineMs
+    const started = Date.now()
+    const id = window.setInterval(() => {
+      if (timesUpSent.current) return
+      if (Date.now() - started < 5000) return
+      if (Date.now() + 1500 < deadline) return
+      timesUpSent.current = true
+      send({ type: 'timesUp' })
+    }, 250)
+    return () => window.clearInterval(id)
+  }, [state?.phase, state?.deadlineMs, send])
 
   function queueCanvas(next: CollagePiece[]) {
     setPieces(next)
