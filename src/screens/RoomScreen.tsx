@@ -37,6 +37,9 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const seconds = useCountdown(state?.deadlineMs ?? null)
   const winnerName =
     state?.winnerName ?? state?.guesses.find((guess) => guess.correct)?.name ?? null
+  const hostName = state?.players.find(
+    (player) => player.id === (state.createdBy ?? state.hostId),
+  )?.name
 
   function leave() {
     disconnect()
@@ -285,7 +288,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     <main className="screen room">
       <header className="room-header">
         <div>
-          <p className="eyebrow">{isHost ? 'You are the host' : 'Joined'}</p>
+          <p className="eyebrow">
+            {isHost ? 'You are the host' : 'Joined'}
+            {hostName ? ` · Host: ${hostName}` : ''}
+          </p>
           <h1 className="room-code">{state.roomCode}</h1>
         </div>
         <button className="btn ghost compact" type="button" onClick={copyCode}>

@@ -126,10 +126,30 @@ function normalizeGuessTimes(raw: unknown): Record<string, GuessClock> {
   return clocks
 }
 
+function normalizePlayers(raw: unknown): Record<string, Player> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const players: Record<string, Player> = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+    const item = value as Record<string, unknown>
+    players[id] = {
+      id: typeof item.id === 'string' ? item.id : id,
+      name: typeof item.name === 'string' && item.name.trim() ? item.name : 'Artist',
+      score: typeof item.score === 'number' ? item.score : 0,
+      seenAt: typeof item.seenAt === 'number' ? item.seenAt : undefined,
+    }
+  }
+  return players
+}
+
+export function playerRecord(id: string, name: string, score = 0): Player {
+  return { id, name, score, seenAt: Date.now() }
+}
+
 export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
   if (!raw || typeof raw !== 'object') return null
   const value = raw as Partial<StoredRoom>
-  const players = value.players && typeof value.players === 'object' ? value.players : {}
+  const players = normalizePlayers(value.players)
   if (!isPhase(value.phase)) return null
   return {
     phase: value.phase,
@@ -174,14 +194,19 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
   const isArtist = selfId === room.artistId
   const showPrompt = isArtist || room.phase === 'reveal' || room.phase === 'voting' || room.phase === 'finale'
   const showOptions = isArtist && room.phase === 'picking'
-  const players = Object.values(room.players)
+  const hostId = room.createdBy ?? room.hostId
+  const players = Object.values(room.players).sort((a, b) => {
+    if (a.id === hostId) return -1
+    if (b.id === hostId) return 1
+    return a.name.localeCompare(b.name)
+  })
   const artist = room.artistId ? room.players[room.artistId] : undefined
   const myVote = room.votes[selfId] ?? null
   return {
     roomCode,
     phase: room.phase,
     selfId,
-    hostId: room.hostId,
+    hostId,
     createdBy: room.createdBy,
     players,
     artistId: room.artistId,
@@ -317,34 +342,14 @@ export function removePlayer(room: StoredRoom, id: string): StoredRoom {
   return next
 }
 
-export function reconcileRoom(room: StoredRoom): StoredRoom {
+export function staleGuestIds(room: StoredRoom, selfId: string) {
   const now = Date.now()
-  const players = { ...room.players }
-  let dropped = false
-  for (const [id, player] of Object.entries(players)) {
-    if (typeof player.seenAt === 'number' && now - player.seenAt > 25_000) {
-      delete players[id]
-      dropped = true
-    }
-  }
-  if (!dropped) return pinnedHost(room)
-  const next = pinnedHost({
-    ...room,
-    players,
-    order: room.order.filter((id) => players[id]),
-  })
-  if (
-    next.artistId &&
-    !next.players[next.artistId] &&
-    (next.phase === 'picking' || next.phase === 'drawing')
-  ) {
-    if (next.order.length === 0) return clearTurn({ ...next, phase: 'lobby' })
-    return beginPick({ ...next, artistIndex: nextArtistIndex(next) })
-  }
-  if (next.phase === 'voting' && allPlayersVoted(next)) {
-    return { ...next, phase: 'finale' }
-  }
-  return next
+  return Object.entries(room.players)
+    .filter(([id, player]) => {
+      if (id === selfId || id === room.createdBy || id === room.hostId) return false
+      return typeof player.seenAt === 'number' && now - player.seenAt > 25_000
+    })
+    .map(([id]) => id)
 }
 
 export function applyMessage(
