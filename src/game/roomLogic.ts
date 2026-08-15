@@ -232,14 +232,19 @@ export function playerCount(room: StoredRoom) {
   return Object.keys(room.players).length
 }
 
-function seatedIds(room: StoredRoom) {
-  const ids = new Set(Object.keys(room.players))
-  const creator = room.createdBy && ids.has(room.createdBy) ? [room.createdBy] : []
-  const rest = [
-    ...room.order.filter((id) => ids.has(id) && id !== room.createdBy),
-    ...Object.keys(room.players).filter((id) => !creator.includes(id) && !room.order.includes(id)),
-  ]
-  return [...creator, ...rest]
+function rotationOrder(room: StoredRoom) {
+  const ids = Object.keys(room.players)
+  const creator = room.createdBy && ids.includes(room.createdBy) ? room.createdBy : null
+  const rest = ids.filter((id) => id !== creator).sort()
+  return creator ? [creator, ...rest] : rest
+}
+
+function nextArtistIndex(room: StoredRoom) {
+  const order = rotationOrder(room)
+  if (order.length === 0) return 0
+  const current = room.artistId ? order.indexOf(room.artistId) : -1
+  if (current === -1) return 0
+  return (current + 1) % order.length
 }
 
 function pinnedHost(room: StoredRoom): StoredRoom {
@@ -249,18 +254,6 @@ function pinnedHost(room: StoredRoom): StoredRoom {
 
 function isController(room: StoredRoom, senderId: string) {
   return senderId === room.createdBy || senderId === room.hostId
-}
-
-function nextArtistIndex(room: StoredRoom) {
-  const order = room.order.length > 0 ? room.order : seatedIds(room)
-  if (order.length === 0) return 0
-  const current = room.artistId ? order.indexOf(room.artistId) : room.artistIndex
-  const start = current >= 0 ? current : 0
-  for (let step = 1; step <= order.length; step += 1) {
-    const index = (start + step) % order.length
-    if (room.players[order[index] ?? '']) return index
-  }
-  return start
 }
 
 function winningGuess(room: StoredRoom) {
@@ -369,7 +362,7 @@ export function applyMessage(
     const started: StoredRoom = {
       ...room,
       settings: sanitizeGameSettings(message.settings),
-      order: seatedIds(room),
+      order: rotationOrder(room),
       artistIndex: 0,
       round: 1,
       collages: [],
@@ -440,12 +433,21 @@ export function applyMessage(
     return endTurn(room)
   }
 
-  if (message.type === 'nextTurn' && room.phase === 'reveal') {
-    const order = seatedIds(room)
-    if (room.round >= room.settings.rounds || order.length === 0) {
+  if (message.type === 'nextTurn') {
+    const ended =
+      room.phase === 'reveal' || Boolean(room.winnerName) || Boolean(winningGuess(room))
+    if (!ended) return room
+    const order = rotationOrder(room)
+    if (order.length === 0) return room
+    if (room.round >= room.settings.rounds) {
       return beginVoting(room)
     }
-    const advanced: StoredRoom = { ...room, order, round: room.round + 1 }
+    const advanced: StoredRoom = {
+      ...room,
+      phase: 'reveal',
+      order,
+      round: room.round + 1,
+    }
     return beginPick({ ...advanced, artistIndex: nextArtistIndex(advanced) })
   }
 
@@ -469,16 +471,10 @@ export function applyMessage(
 }
 
 function beginPick(room: StoredRoom): StoredRoom {
-  const order = room.order.length > 0 ? room.order : seatedIds(room)
+  const order = rotationOrder(room)
   if (order.length === 0) return clearTurn({ ...room, phase: 'lobby', order })
-  let artistIndex = ((room.artistIndex % order.length) + order.length) % order.length
-  for (let step = 0; step < order.length; step += 1) {
-    const index = (artistIndex + step) % order.length
-    if (room.players[order[index] ?? '']) {
-      artistIndex = index
-      break
-    }
-  }
+  const artistIndex =
+    ((room.artistIndex % order.length) + order.length) % order.length
   const artistId = order[artistIndex]
   if (!artistId || !room.players[artistId]) {
     return clearTurn({ ...room, phase: 'lobby', order })
@@ -626,7 +622,7 @@ function clearTurn(room: StoredRoom): StoredRoom {
     guesses: [],
     deadlineMs: null,
     winnerName: null,
-    order: seatedIds(room),
+    order: rotationOrder(room),
     artistIndex: 0,
     round: 0,
     collages: [],

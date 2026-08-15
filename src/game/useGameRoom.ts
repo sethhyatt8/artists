@@ -37,6 +37,7 @@ export function useGameRoom(session: RoomSession) {
   )
   const selfId = useRef(tabId())
   const sessionRef = useRef(session)
+  const latestState = useRef<RoomState | null>(null)
 
   useEffect(() => {
     sessionRef.current = session
@@ -78,7 +79,9 @@ export function useGameRoom(session: RoomSession) {
             players: { ...room.players, [id]: playerRecord(id, name) },
           } satisfies StoredRoom)
       setError(null)
-      setState(toRoomState(visible, id, code))
+      const view = toRoomState(visible, id, code)
+      latestState.current = view
+      setState(view)
       for (const guestId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${guestId}`, null)
       }
@@ -165,10 +168,18 @@ export function useGameRoom(session: RoomSession) {
       .then(async ({ data }) => {
         let room = normalizeStoredRoom(data)
         if (!room) return
+        const known = latestState.current?.players ?? []
+        if (known.length > 0) {
+          const players = { ...room.players }
+          for (const player of known) {
+            if (!players[player.id]) players[player.id] = player
+          }
+          room = { ...room, players }
+        }
         if (!room.players[id]) {
           await rtdbPatch(`${path}/players/${id}`, playerRecord(id, name))
-          const next = addPlayer(room, id, name)
-          if (typeof next !== 'string') room = next
+          const joined = addPlayer(room, id, name)
+          if (typeof joined !== 'string') room = joined
         }
         const next = applyMessage(room, id, message)
         if ('error' in next) {
@@ -180,6 +191,12 @@ export function useGameRoom(session: RoomSession) {
         if (sessionRef.current.intent !== 'create') {
           delete patch.hostId
           delete patch.createdBy
+        }
+        if (message.type === 'nextTurn') {
+          patch.artistId = next.artistId
+          patch.artistIndex = next.artistIndex
+          patch.order = next.order
+          patch.phase = next.phase
         }
         const addedGuesses = next.guesses.filter(
           (guess) => !room.guesses.some((item) => item.id === guess.id),

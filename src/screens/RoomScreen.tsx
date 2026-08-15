@@ -249,6 +249,9 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           <aside className="sidebar sidebar-right">
             <GuessFeed guesses={state.guesses} />
             <ScoreList players={state.players} connectionId={connectionId} />
+            {state.round < state.settings.rounds ? (
+              <p className="hint">Next artist: {nextArtistName(state)}</p>
+            ) : null}
             <button
               className="btn primary"
               type="button"
@@ -741,6 +744,19 @@ function formatAverageMs(ms: number) {
   const mins = Math.floor(seconds / 60)
   const rest = seconds - mins * 60
   return `${mins}m ${rest.toFixed(1)}s`
+}
+
+function nextArtistName(state: RoomState) {
+  const ids = state.players.map((player) => player.id)
+  const creator = state.createdBy
+  const order =
+    creator && ids.includes(creator)
+      ? [creator, ...ids.filter((id) => id !== creator).sort()]
+      : [...ids].sort()
+  if (order.length === 0) return 'the other player'
+  const current = state.artistId ? order.indexOf(state.artistId) : -1
+  const nextId = order[(current + 1) % order.length]
+  return state.players.find((player) => player.id === nextId)?.name ?? 'the other player'
 }
 
 function formatTime(seconds: number) {
