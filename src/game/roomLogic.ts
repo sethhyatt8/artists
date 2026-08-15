@@ -192,7 +192,11 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
 
 export function toRoomState(room: StoredRoom, selfId: string, roomCode: string): RoomState {
   const isArtist = selfId === room.artistId
-  const showPrompt = isArtist || room.phase === 'reveal' || room.phase === 'voting' || room.phase === 'finale'
+  const showPrompt =
+    (isArtist && room.phase === 'drawing') ||
+    room.phase === 'reveal' ||
+    room.phase === 'voting' ||
+    room.phase === 'finale'
   const showOptions = isArtist && room.phase === 'picking'
   const hostId = room.createdBy ?? room.hostId
   const players = Object.values(room.players).sort((a, b) => {
@@ -288,7 +292,12 @@ export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, un
   for (const key of ROOM_KEYS) {
     if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) {
       if (key === 'winnerName' && !next.winnerName && next.phase === 'reveal') continue
-      patch[key] = next[key] ?? null
+      const value = next[key]
+      if (Array.isArray(value) && value.length === 0) {
+        patch[key] = null
+      } else {
+        patch[key] = value ?? null
+      }
     }
   }
   return patch

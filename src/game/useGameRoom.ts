@@ -160,6 +160,9 @@ export function useGameRoom(session: RoomSession) {
     const path = `rooms/${code}`
 
     if (message.type === 'canvas') {
+      if (latestState.current?.phase !== 'drawing' || latestState.current.artistId !== id) {
+        return
+      }
       void rtdbSet(`${path}/pieces`, message.pieces)
       return
     }
@@ -197,6 +200,11 @@ export function useGameRoom(session: RoomSession) {
           patch.artistIndex = next.artistIndex
           patch.order = next.order
           patch.phase = next.phase
+          patch.prompt = null
+          patch.pieces = null
+          patch.guesses = null
+          patch.winnerName = null
+          patch.deadlineMs = null
         }
         const addedGuesses = next.guesses.filter(
           (guess) => !room.guesses.some((item) => item.id === guess.id),
