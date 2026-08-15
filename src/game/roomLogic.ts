@@ -21,6 +21,7 @@ import {
 import type { CollagePiece } from './collage'
 
 const VOTE_POINTS = [3, 2, 1]
+const DRAWING_GRACE_MS = 10_000
 
 export type GuessClock = {
   name: string
@@ -220,6 +221,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     pieces: room.phase === 'lobby' ? [] : room.pieces,
     guesses: room.guesses,
     deadlineMs: room.deadlineMs,
+    drawStartedMs: room.drawStartedMs,
     winnerName: room.winnerName,
     settings: room.settings,
     round: room.round,
@@ -279,6 +281,11 @@ function turnHasExpired(room: StoredRoom) {
     return Date.now() - room.drawStartedMs >= turnMs - slack
   }
   return false
+}
+
+function tooEarlyToEndDrawing(room: StoredRoom) {
+  if (typeof room.drawStartedMs !== 'number') return false
+  return Date.now() - room.drawStartedMs < DRAWING_GRACE_MS
 }
 
 export function isSpuriousDrawEnd(prev: StoredRoom, next: StoredRoom) {
@@ -445,7 +452,7 @@ export function applyMessage(
     }
     const guesses = [...room.guesses, guess].slice(-40)
     const next: StoredRoom = { ...room, guesses, guessSerial }
-    if (!correct) return next
+    if (!correct || tooEarlyToEndDrawing(room)) return next
     return endTurn({
       ...next,
       winnerName: player.name,
@@ -455,6 +462,7 @@ export function applyMessage(
 
   if (message.type === 'timesUp') {
     if (room.phase !== 'drawing') return room
+    if (tooEarlyToEndDrawing(room)) return room
     const winner = winningGuess(room)
     if (winner) {
       return endTurn({

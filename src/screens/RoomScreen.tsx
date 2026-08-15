@@ -69,18 +69,31 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }, [state?.phase])
 
   useEffect(() => {
-    if (state?.phase !== 'drawing' || typeof state.deadlineMs !== 'number') return
+    if (state?.phase !== 'drawing') return
+    const startedAt =
+      state.drawStartedMs ??
+      (typeof state.deadlineMs === 'number'
+        ? state.deadlineMs - state.settings.turnSeconds * 1000
+        : Date.now())
     const deadline = state.deadlineMs
-    const started = Date.now()
     const id = window.setInterval(() => {
       if (timesUpSent.current) return
-      if (Date.now() - started < 5000) return
-      if (Date.now() + 1500 < deadline) return
+      if (Date.now() - startedAt < 10_000) return
+      const won = state.guesses.some((guess) => guess.correct)
+      const expired = typeof deadline === 'number' && Date.now() + 1500 >= deadline
+      if (!won && !expired) return
       timesUpSent.current = true
       send({ type: 'timesUp' })
     }, 250)
     return () => window.clearInterval(id)
-  }, [state?.phase, state?.deadlineMs, send])
+  }, [
+    state?.phase,
+    state?.deadlineMs,
+    state?.drawStartedMs,
+    state?.guesses,
+    state?.settings.turnSeconds,
+    send,
+  ])
 
   function queueCanvas(next: CollagePiece[]) {
     setPieces(next)
@@ -218,14 +231,18 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           </div>
           <aside className="sidebar sidebar-right">
             <GuessFeed guesses={state.guesses} />
-            <form className="guess-form" onSubmit={sendGuess}>
+            <form className="guess-form" onSubmit={sendGuess} autoComplete="off">
               <label className="field">
                 <span>Your guess</span>
                 <input
                   value={guessText}
                   maxLength={MAX_GUESS_LENGTH}
                   autoComplete="off"
-                  placeholder="pizza"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  name="artists-guess"
+                  placeholder="Type a guess"
                   onChange={(event) => setGuessText(event.target.value)}
                 />
               </label>

@@ -111,5 +111,11 @@ assert(
 )
 assert(afterPiece.pieces.some((item) => item.id === 'piece-live'), 'piece did not persist')
 
+room = unwrap(applyMessage(afterPiece, guest, { type: 'guess', text: 'pizza' }))
+await put(`rooms/${code}`, room)
+const afterGuess = normalizeStoredRoom(await get(`rooms/${code}`))
+assert(afterGuess?.phase === 'drawing', `early guess ended the turn: phase=${afterGuess?.phase}`)
+assert(afterGuess?.guesses.some((guess) => guess.correct), 'correct guess should be stored')
+
 await put(`rooms/${code}`, null)
 console.log(`live Firebase flow passed for room ${code}`)

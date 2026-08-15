@@ -90,6 +90,7 @@ export type RoomState = {
   pieces: CollagePiece[]
   guesses: Guess[]
   deadlineMs: number | null
+  drawStartedMs: number | null
   winnerName: string | null
   settings: GameSettings
   round: number
@@ -270,6 +271,7 @@ function isRoomState(value: unknown): value is RoomState {
   if (!Array.isArray(value.pieces) || !value.pieces.every(isCollagePiece)) return false
   if (!Array.isArray(value.guesses) || !value.guesses.every(isGuess)) return false
   if (value.deadlineMs !== null && typeof value.deadlineMs !== 'number') return false
+  if (value.drawStartedMs !== null && typeof value.drawStartedMs !== 'number') return false
   if (value.winnerName !== null && typeof value.winnerName !== 'string') return false
   if (typeof value.round !== 'number') return false
   if (!isGameSettings(value.settings)) return false

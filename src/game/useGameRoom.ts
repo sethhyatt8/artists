@@ -178,32 +178,6 @@ export function useGameRoom(session: RoomSession) {
       return
     }
 
-    if (message.type === 'guess') {
-      void rtdbGet(path)
-        .then(async ({ data }) => {
-          let room = normalizeStoredRoom(data)
-          if (!room) return
-          const next = applyMessage(room, id, message)
-          if ('error' in next) return
-          const added = next.guesses.filter(
-            (guess) => !room.guesses.some((item) => item.id === guess.id),
-          )
-          for (const guess of added) {
-            await rtdbSet(`${path}/guesses/${guess.id}`, guess)
-          }
-          if (next.phase === room.phase) return
-          await rtdbTransaction(path, (current) => {
-            const live = normalizeStoredRoom(current)
-            if (!live) return undefined
-            const applied = applyMessage(live, id, message)
-            if ('error' in applied) return undefined
-            return applied
-          })
-        })
-        .catch(() => undefined)
-      return
-    }
-
     void rtdbTransaction(path, (current) => {
       let room = normalizeStoredRoom(current)
       if (!room) return undefined

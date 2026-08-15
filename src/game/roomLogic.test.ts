@@ -84,7 +84,20 @@ assert(
   'reveal without expiry, a winner, or a saved collage must not kill the collage',
 )
 
-room = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
+const earlyGuess = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
+assert(earlyGuess.phase === 'drawing', 'a guess in the first seconds must not end the collage')
+assert(
+  earlyGuess.guesses.some((guess) => guess.correct),
+  'the correct guess should still appear in the feed',
+)
+
+room = unwrap(
+  applyMessage(
+    { ...room, drawStartedMs: Date.now() - 15_000 },
+    guest,
+    { type: 'guess', text: 'pizza' },
+  ),
+)
 assert(room.phase === 'reveal', `expected reveal, got ${room.phase}`)
 assert(room.winnerName === 'Bob', `expected Bob to win, got ${room.winnerName}`)
 
