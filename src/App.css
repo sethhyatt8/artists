@@ -534,7 +534,7 @@
     place-items: center;
   }
 
-  .canvas-frame {
+  .canvas-stage .canvas-frame {
     width: min(100cqi, 100cqb);
     height: auto;
     aspect-ratio: 1;
@@ -552,4 +552,85 @@
   .transform-row .btn {
     width: 100%;
   }
+}
+
+.screen.room.vote,
+.screen.room.finale {
+  width: min(980px, 100%);
+}
+
+.vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.vote-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-raise);
+}
+
+.vote-card.ranked-1 {
+  border-color: #d4a017;
+}
+
+.vote-card.ranked-2 {
+  border-color: #8a8f98;
+}
+
+.vote-card.ranked-3 {
+  border-color: #b87333;
+}
+
+.vote-stage {
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.vote-stage .canvas-frame {
+  width: 100%;
+  height: 100%;
+}
+
+.vote-prompt {
+  margin: 0;
+  font-weight: 600;
+}
+
+.vote-place {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ember);
+  color: #1a1410;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rank-row {
+  display: flex;
+  gap: 6px;
+}
+
+.rank-row .btn {
+  flex: 1;
+}
+
+.champion-card p {
+  margin: 0;
+}
+
+.finale-grid {
+  margin-top: 12px;
 }

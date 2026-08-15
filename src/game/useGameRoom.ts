@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isFirebaseConfigured, rtdbListen, rtdbSet, rtdbTransaction } from './rtdb'
+import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet, rtdbTransaction } from './rtdb'
 import {
   addPlayer,
   applyMessage,
@@ -7,6 +7,7 @@ import {
   normalizeStoredRoom,
   playerCount,
   reconcileRoom,
+  roomPatch,
   toRoomState,
 } from './roomLogic'
 import { sanitizeName, type ClientMessage, type RoomState } from './protocol'
@@ -34,7 +35,10 @@ export function useGameRoom(session: RoomSession) {
   )
   const selfId = useRef(tabId())
   const sessionRef = useRef(session)
-  sessionRef.current = session
+
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -49,6 +53,7 @@ export function useGameRoom(session: RoomSession) {
     const path = `rooms/${code}`
     let stopped = false
     let lastReconcile = ''
+    let heartbeat: number | null = null
 
     const stopListen = rtdbListen(path, (data) => {
       const room = normalizeStoredRoom(data)
@@ -56,57 +61,73 @@ export function useGameRoom(session: RoomSession) {
       setError(null)
       setState(toRoomState(room, id, code))
       const fixed = reconcileRoom(room)
-      const serialized = JSON.stringify(fixed)
-      if (serialized !== JSON.stringify(room) && serialized !== lastReconcile) {
-        lastReconcile = serialized
-        void rtdbTransaction(path, (current) => {
-          const live = normalizeStoredRoom(current)
-          return live ? reconcileRoom(live) : undefined
+      const patch = roomPatch(room, fixed)
+      delete patch.hostId
+      delete patch.createdBy
+      const serialized = JSON.stringify(patch)
+      if (Object.keys(patch).length === 0 || serialized === lastReconcile) return
+      lastReconcile = serialized
+      void rtdbPatch(path, patch).catch(() => undefined)
+    })
+
+    function fail(message: string) {
+      if (stopped) return
+      setError(message)
+      setStatus('closed')
+    }
+
+    function connected() {
+      if (stopped) return
+      setStatus('open')
+      heartbeat = window.setInterval(() => {
+        void rtdbSet(`rooms/${code}/players/${id}/seenAt`, Date.now())
+      }, 4000)
+    }
+
+    if (session.intent === 'join') {
+      void rtdbGet(path)
+        .then(async ({ data }) => {
+          const room = normalizeStoredRoom(data)
+          if (!room || playerCount(room) === 0) {
+            fail('Room not found. Check the code, or create a room.')
+            return
+          }
+          const next = addPlayer(room, id, name)
+          if (typeof next === 'string') {
+            fail(next)
+            return
+          }
+          await rtdbPatch(path, { players: next.players, order: next.order })
+          connected()
         })
-      }
-    })
-
-    void rtdbTransaction(path, (current) => {
-      const room = normalizeStoredRoom(current)
-      if (session.intent === 'join') {
-        if (!room || playerCount(room) === 0) return undefined
-        const next = addPlayer(room, id, name)
-        return typeof next === 'string' ? undefined : next
-      }
-      if (room && playerCount(room) > 0) {
-        const next = addPlayer(room, id, name)
-        return typeof next === 'string' ? undefined : next
-      }
-      return emptyRoom(id, name)
-    })
-      .then((result) => {
-        if (stopped) return
-        if (!result.committed) {
-          setError(
-            session.intent === 'join'
-              ? 'Room not found. Check the code, or create a room.'
-              : 'This room is full (6 players).',
-          )
-          setStatus('closed')
-          return
+        .catch(() => {
+          fail('Could not reach Firebase. Confirm Realtime Database is created.')
+        })
+    } else {
+      void rtdbTransaction(path, (current) => {
+        const room = normalizeStoredRoom(current)
+        if (room && playerCount(room) > 0) {
+          const next = addPlayer(room, id, name)
+          return typeof next === 'string' ? undefined : next
         }
-        setStatus('open')
+        return emptyRoom(id, name)
       })
-      .catch(() => {
-        if (stopped) return
-        setError('Could not reach Firebase. Confirm Realtime Database is created.')
-        setStatus('closed')
-      })
-
-    const heartbeat = window.setInterval(() => {
-      void rtdbSet(`rooms/${code}/players/${id}/seenAt`, Date.now())
-    }, 4000)
+        .then((result) => {
+          if (!result.committed) {
+            fail('This room is full (6 players).')
+            return
+          }
+          connected()
+        })
+        .catch(() => {
+          fail('Could not reach Firebase. Confirm Realtime Database is created.')
+        })
+    }
 
     return () => {
       stopped = true
       stopListen()
-      window.clearInterval(heartbeat)
-      void rtdbSet(`rooms/${code}/players/${id}`, null)
+      if (heartbeat !== null) window.clearInterval(heartbeat)
     }
   }, [session.intent, session.name, session.roomCode])
 
@@ -121,19 +142,39 @@ export function useGameRoom(session: RoomSession) {
       return
     }
 
-    void rtdbTransaction(path, (current) => {
-      const room = normalizeStoredRoom(current)
-      if (!room) return undefined
-      const next = applyMessage(room, id, message)
-      if ('error' in next) return undefined
-      return next
-    }).then((result) => {
-      if (result.committed) return
-      const room = normalizeStoredRoom(result.snapshot)
-      if (!room) return
-      const next = applyMessage(room, id, message)
-      if ('error' in next) setError(next.error)
-    })
+    void rtdbGet(path)
+      .then(async ({ data }) => {
+        const room = normalizeStoredRoom(data)
+        if (!room) return
+        const next = applyMessage(room, id, message)
+        if ('error' in next) {
+          setError(next.error)
+          return
+        }
+        const patch = roomPatch(room, next)
+        if (sessionRef.current.intent !== 'create') {
+          delete patch.hostId
+          delete patch.createdBy
+        }
+        const addedGuesses = next.guesses.filter(
+          (guess) => !room.guesses.some((item) => item.id === guess.id),
+        )
+        if (addedGuesses.length > 0) {
+          delete patch.guesses
+          await Promise.all(
+            addedGuesses.map((guess) => rtdbSet(`${path}/guesses/${guess.id}`, guess)),
+          )
+        }
+        if (Object.keys(patch).length === 0) return
+        await rtdbPatch(path, patch)
+      })
+      .catch(() => undefined)
+  }, [])
+
+  const disconnect = useCallback(() => {
+    const code = sessionRef.current.roomCode
+    const id = selfId.current
+    void rtdbSet(`rooms/${code}/players/${id}`, null)
   }, [])
 
   return {
@@ -141,5 +182,6 @@ export function useGameRoom(session: RoomSession) {
     error,
     status,
     send,
+    disconnect,
   }
 }

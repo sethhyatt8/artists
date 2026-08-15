@@ -35,6 +35,8 @@ export const PHASE = {
   picking: 'picking',
   drawing: 'drawing',
   reveal: 'reveal',
+  voting: 'voting',
+  finale: 'finale',
 } as const
 
 export type Phase = (typeof PHASE)[keyof typeof PHASE]
@@ -54,11 +56,32 @@ export type Guess = {
   correct: boolean
 }
 
+export type SavedCollage = {
+  id: string
+  round: number
+  artistId: string
+  artistName: string
+  prompt: string
+  pieces: CollagePiece[]
+}
+
+export type RankedCollage = SavedCollage & {
+  votePoints: number
+  place: number
+}
+
+export type GuessChampion = {
+  name: string
+  averageMs: number
+  correctCount: number
+}
+
 export type RoomState = {
   roomCode: string
   phase: Phase
   selfId: string
   hostId: string | null
+  createdBy: string | null
   players: Player[]
   artistId: string | null
   artistName: string | null
@@ -70,6 +93,12 @@ export type RoomState = {
   winnerName: string | null
   settings: GameSettings
   round: number
+  collages: SavedCollage[]
+  myVote: string[] | null
+  votedCount: number
+  voterCount: number
+  favorites: RankedCollage[]
+  guessChampion: GuessChampion | null
 }
 
 export type ClientMessage =
@@ -80,6 +109,7 @@ export type ClientMessage =
   | { type: 'guess'; text: string }
   | { type: 'timesUp' }
   | { type: 'nextTurn' }
+  | { type: 'vote'; ranks: string[] }
   | { type: 'backToLobby' }
 
 export type ServerMessage =
@@ -127,6 +157,15 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
     }
     if (parsed.type === 'guess' && typeof parsed.text === 'string') {
       return { type: 'guess', text: parsed.text.slice(0, MAX_GUESS_LENGTH) }
+    }
+    if (parsed.type === 'vote' && Array.isArray(parsed.ranks)) {
+      const ranks: string[] = []
+      for (const item of parsed.ranks) {
+        if (typeof item !== 'string' || ranks.includes(item)) continue
+        ranks.push(item)
+        if (ranks.length === 3) break
+      }
+      return { type: 'vote', ranks }
     }
     if (parsed.type === 'canvas' && Array.isArray(parsed.pieces)) {
       const pieces: CollagePiece[] = []
@@ -212,7 +251,9 @@ function isRoomState(value: unknown): value is RoomState {
     value.phase !== 'lobby' &&
     value.phase !== 'picking' &&
     value.phase !== 'drawing' &&
-    value.phase !== 'reveal'
+    value.phase !== 'reveal' &&
+    value.phase !== 'voting' &&
+    value.phase !== 'finale'
   ) {
     return false
   }

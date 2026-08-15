@@ -5,9 +5,12 @@ import {
   type ClientMessage,
   type GameSettings,
   type Guess,
+  type GuessChampion,
   type Phase,
   type Player,
+  type RankedCollage,
   type RoomState,
+  type SavedCollage,
 } from './protocol'
 import {
   answersMatch,
@@ -17,9 +20,17 @@ import {
 } from './prompts'
 import type { CollagePiece } from './collage'
 
+const VOTE_POINTS = [3, 2, 1]
+
+export type GuessClock = {
+  name: string
+  times: number[]
+}
+
 export type StoredRoom = {
   phase: Phase
   hostId: string | null
+  createdBy: string | null
   players: Record<string, Player>
   order: string[]
   artistIndex: number
@@ -33,16 +44,21 @@ export type StoredRoom = {
   settings: GameSettings
   round: number
   guessSerial: number
+  collages: SavedCollage[]
+  votes: Record<string, string[]>
+  guessTimes: Record<string, GuessClock>
+  drawStartedMs: number | null
 }
 
 export function emptyRoom(hostId: string, name: string): StoredRoom {
   return {
     phase: 'lobby',
     hostId,
+    createdBy: hostId,
     players: {
       [hostId]: { id: hostId, name, score: 0, seenAt: Date.now() },
     },
-    order: [],
+    order: [hostId],
     artistIndex: 0,
     artistId: null,
     prompt: null,
@@ -54,47 +70,119 @@ export function emptyRoom(hostId: string, name: string): StoredRoom {
     settings: { ...DEFAULT_SETTINGS },
     round: 0,
     guessSerial: 0,
+    collages: [],
+    votes: {},
+    guessTimes: {},
+    drawStartedMs: null,
   }
+}
+
+function isPhase(value: unknown): value is Phase {
+  return (
+    value === 'lobby' ||
+    value === 'picking' ||
+    value === 'drawing' ||
+    value === 'reveal' ||
+    value === 'voting' ||
+    value === 'finale'
+  )
+}
+
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (!value || typeof value !== 'object') return []
+  return Object.keys(value)
+    .sort((a, b) => {
+      const na = Number(a)
+      const nb = Number(b)
+      const aInt = Number.isInteger(na) && String(na) === a
+      const bInt = Number.isInteger(nb) && String(nb) === b
+      if (aInt && bInt) return na - nb
+      return a.localeCompare(b)
+    })
+    .map((key) => (value as Record<string, T>)[key])
+}
+
+function normalizeVotes(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object') return {}
+  const votes: Record<string, string[]> = {}
+  for (const [id, ranks] of Object.entries(raw as Record<string, unknown>)) {
+    votes[id] = asArray<string>(ranks).filter((item) => typeof item === 'string')
+  }
+  return votes
+}
+
+function normalizeGuessTimes(raw: unknown): Record<string, GuessClock> {
+  if (!raw || typeof raw !== 'object') return {}
+  const clocks: Record<string, GuessClock> = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue
+    const item = value as { name?: unknown; times?: unknown }
+    clocks[id] = {
+      name: typeof item.name === 'string' ? item.name : 'Artist',
+      times: asArray<number>(item.times).filter((time) => typeof time === 'number'),
+    }
+  }
+  return clocks
 }
 
 export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
   if (!raw || typeof raw !== 'object') return null
   const value = raw as Partial<StoredRoom>
   const players = value.players && typeof value.players === 'object' ? value.players : {}
-  const phase = value.phase
-  if (phase !== 'lobby' && phase !== 'picking' && phase !== 'drawing' && phase !== 'reveal') {
-    return null
-  }
+  if (!isPhase(value.phase)) return null
   return {
-    phase,
+    phase: value.phase,
     hostId: typeof value.hostId === 'string' ? value.hostId : null,
+    createdBy:
+      typeof value.createdBy === 'string'
+        ? value.createdBy
+        : typeof value.hostId === 'string'
+          ? value.hostId
+          : null,
     players,
-    order: Array.isArray(value.order) ? value.order : [],
+    order: asArray<string>(value.order),
     artistIndex: typeof value.artistIndex === 'number' ? value.artistIndex : 0,
     artistId: typeof value.artistId === 'string' ? value.artistId : null,
     prompt: typeof value.prompt === 'string' ? value.prompt : null,
-    options: Array.isArray(value.options) ? value.options : null,
-    pieces: Array.isArray(value.pieces) ? value.pieces : [],
-    guesses: Array.isArray(value.guesses) ? value.guesses : [],
+    options:
+      value.options == null
+        ? null
+        : asArray<CategoryOptions>(value.options),
+    pieces: asArray<CollagePiece>(value.pieces),
+    guesses: asArray<Guess>(value.guesses),
     deadlineMs: typeof value.deadlineMs === 'number' ? value.deadlineMs : null,
     winnerName: typeof value.winnerName === 'string' ? value.winnerName : null,
     settings: sanitizeGameSettings(value.settings),
     round: typeof value.round === 'number' ? value.round : 0,
     guessSerial: typeof value.guessSerial === 'number' ? value.guessSerial : 0,
+    collages: asArray<SavedCollage>(value.collages).map((item) => ({
+      id: typeof item?.id === 'string' ? item.id : 'c-0',
+      round: typeof item?.round === 'number' ? item.round : 0,
+      artistId: typeof item?.artistId === 'string' ? item.artistId : '',
+      artistName: typeof item?.artistName === 'string' ? item.artistName : 'Artist',
+      prompt: typeof item?.prompt === 'string' ? item.prompt : 'untitled',
+      pieces: asArray<CollagePiece>(item?.pieces),
+    })),
+    votes: normalizeVotes(value.votes),
+    guessTimes: normalizeGuessTimes(value.guessTimes),
+    drawStartedMs: typeof value.drawStartedMs === 'number' ? value.drawStartedMs : null,
   }
 }
 
 export function toRoomState(room: StoredRoom, selfId: string, roomCode: string): RoomState {
   const isArtist = selfId === room.artistId
-  const showPrompt = isArtist || room.phase === 'reveal'
+  const showPrompt = isArtist || room.phase === 'reveal' || room.phase === 'voting' || room.phase === 'finale'
   const showOptions = isArtist && room.phase === 'picking'
   const players = Object.values(room.players)
   const artist = room.artistId ? room.players[room.artistId] : undefined
+  const myVote = room.votes[selfId] ?? null
   return {
     roomCode,
     phase: room.phase,
     selfId,
     hostId: room.hostId,
+    createdBy: room.createdBy,
     players,
     artistId: room.artistId,
     artistName: artist?.name ?? null,
@@ -106,6 +194,12 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     winnerName: room.winnerName,
     settings: room.settings,
     round: room.round,
+    collages: room.collages,
+    myVote,
+    votedCount: Object.keys(room.votes).length,
+    voterCount: playerCount(room),
+    favorites: rankFavorites(room.collages, room.votes),
+    guessChampion: pickGuessChampion(room.guessTimes),
   }
 }
 
@@ -113,27 +207,94 @@ export function playerCount(room: StoredRoom) {
   return Object.keys(room.players).length
 }
 
+function seatedIds(room: StoredRoom) {
+  const ids = new Set(Object.keys(room.players))
+  const creator = room.createdBy && ids.has(room.createdBy) ? [room.createdBy] : []
+  const rest = [
+    ...room.order.filter((id) => ids.has(id) && id !== room.createdBy),
+    ...Object.keys(room.players).filter((id) => !creator.includes(id) && !room.order.includes(id)),
+  ]
+  return [...creator, ...rest]
+}
+
+function pinnedHost(room: StoredRoom): StoredRoom {
+  const createdBy = room.createdBy ?? room.hostId
+  return { ...room, createdBy, hostId: createdBy ?? room.hostId }
+}
+
+function isController(room: StoredRoom, senderId: string) {
+  return senderId === room.createdBy || senderId === room.hostId
+}
+
+function nextArtistIndex(room: StoredRoom) {
+  const order = room.order.length > 0 ? room.order : seatedIds(room)
+  if (order.length === 0) return 0
+  const current = room.artistId ? order.indexOf(room.artistId) : room.artistIndex
+  const start = current >= 0 ? current : 0
+  for (let step = 1; step <= order.length; step += 1) {
+    const index = (start + step) % order.length
+    if (room.players[order[index] ?? '']) return index
+  }
+  return start
+}
+
+function winningGuess(room: StoredRoom) {
+  return [...room.guesses].reverse().find((guess) => guess.correct) ?? null
+}
+
+const ROOM_KEYS: (keyof StoredRoom)[] = [
+  'phase',
+  'hostId',
+  'createdBy',
+  'players',
+  'order',
+  'artistIndex',
+  'artistId',
+  'prompt',
+  'options',
+  'pieces',
+  'guesses',
+  'deadlineMs',
+  'winnerName',
+  'settings',
+  'round',
+  'guessSerial',
+  'collages',
+  'votes',
+  'guessTimes',
+  'drawStartedMs',
+]
+
+export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, unknown> {
+  const patch: Record<string, unknown> = {}
+  for (const key of ROOM_KEYS) {
+    if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) {
+      if (key === 'winnerName' && !next.winnerName && next.phase === 'reveal') continue
+      patch[key] = next[key] ?? null
+    }
+  }
+  return patch
+}
+
 export function addPlayer(room: StoredRoom, id: string, name: string): StoredRoom | string {
   if (room.players[id]) {
-    return {
+    return pinnedHost({
       ...room,
       players: {
         ...room.players,
         [id]: { ...room.players[id], name, seenAt: Date.now() },
       },
-    }
+    })
   }
   if (playerCount(room) >= MAX_PLAYERS) return 'This room is full (6 players).'
-  const next: StoredRoom = {
+  return pinnedHost({
     ...room,
     players: {
       ...room.players,
       [id]: { id, name, score: 0, seenAt: Date.now() },
     },
-  }
-  if (!next.hostId) next.hostId = id
-  if (next.phase !== 'lobby') next.order = [...next.order, id]
-  return next
+    order: room.order.includes(id) ? room.order : [...room.order, id],
+  })
 }
 
 export function removePlayer(room: StoredRoom, id: string): StoredRoom {
@@ -143,15 +304,14 @@ export function removePlayer(room: StoredRoom, id: string): StoredRoom {
   if (ids.length === 0) {
     return emptyRoom(id, 'Artist')
   }
-  const next: StoredRoom = {
+  let next: StoredRoom = pinnedHost({
     ...room,
     players,
     order: room.order.filter((item) => item !== id),
-  }
-  if (next.hostId === id) next.hostId = ids[0] ?? null
+  })
   if (id === next.artistId && (next.phase === 'picking' || next.phase === 'drawing')) {
     if (next.order.length === 0) return clearTurn({ ...next, phase: 'lobby' })
-    next.artistIndex %= next.order.length
+    next = { ...next, artistIndex: next.artistIndex % next.order.length }
     return beginPick(next)
   }
   return next
@@ -160,29 +320,29 @@ export function removePlayer(room: StoredRoom, id: string): StoredRoom {
 export function reconcileRoom(room: StoredRoom): StoredRoom {
   const now = Date.now()
   const players = { ...room.players }
+  let dropped = false
   for (const [id, player] of Object.entries(players)) {
     if (typeof player.seenAt === 'number' && now - player.seenAt > 25_000) {
       delete players[id]
+      dropped = true
     }
   }
-  const ids = Object.keys(players)
-  let next: StoredRoom = {
+  if (!dropped) return pinnedHost(room)
+  const next = pinnedHost({
     ...room,
     players,
     order: room.order.filter((id) => players[id]),
-  }
-  if (ids.length === 0) return next
-  if (!next.hostId || !next.players[next.hostId]) {
-    next = { ...next, hostId: ids[0] ?? null }
-  }
+  })
   if (
     next.artistId &&
     !next.players[next.artistId] &&
     (next.phase === 'picking' || next.phase === 'drawing')
   ) {
     if (next.order.length === 0) return clearTurn({ ...next, phase: 'lobby' })
-    next = { ...next, artistIndex: next.artistIndex % Math.max(next.order.length, 1) }
-    return beginPick(next)
+    return beginPick({ ...next, artistIndex: nextArtistIndex(next) })
+  }
+  if (next.phase === 'voting' && allPlayersVoted(next)) {
+    return { ...next, phase: 'finale' }
   }
   return next
 }
@@ -195,18 +355,22 @@ export function applyMessage(
   const player = room.players[senderId]
   if (!player) return room
 
-  if (message.type === 'settings' && senderId === room.hostId && room.phase === 'lobby') {
+  if (message.type === 'settings' && isController(room, senderId) && room.phase === 'lobby') {
     return { ...room, settings: sanitizeGameSettings(message.settings) }
   }
 
-  if (message.type === 'start' && senderId === room.hostId && room.phase === 'lobby') {
+  if (message.type === 'start' && isController(room, senderId) && room.phase === 'lobby') {
     if (playerCount(room) < 2) return { error: 'Need at least two players to start.' }
     const started: StoredRoom = {
       ...room,
       settings: sanitizeGameSettings(message.settings),
-      order: Object.keys(room.players),
+      order: seatedIds(room),
       artistIndex: 0,
       round: 1,
+      collages: [],
+      votes: {},
+      guessTimes: {},
+      drawStartedMs: null,
       players: Object.fromEntries(
         Object.values(room.players).map((item) => [item.id, { ...item, score: 0 }]),
       ),
@@ -218,12 +382,14 @@ export function applyMessage(
     if (!room.options || !optionExists(room.options, message.category, message.prompt)) {
       return room
     }
+    const now = Date.now()
     return {
       ...room,
       prompt: message.prompt,
       options: null,
       phase: 'drawing',
-      deadlineMs: Date.now() + room.settings.turnSeconds * 1000,
+      deadlineMs: now + room.settings.turnSeconds * 1000,
+      drawStartedMs: now,
     }
   }
 
@@ -237,51 +403,60 @@ export function applyMessage(
     const correct = answersMatch(text, room.prompt)
     const guessSerial = room.guessSerial + 1
     const guess: Guess = {
-      id: `g-${guessSerial}`,
+      id: `g-${senderId}-${guessSerial}`,
       playerId: senderId,
       name: player.name,
       text,
       correct,
     }
-    let guesses = [...room.guesses, guess]
-    if (guesses.length > 40) guesses = guesses.slice(-40)
+    const guesses = [...room.guesses, guess].slice(-40)
     const next: StoredRoom = { ...room, guesses, guessSerial }
     if (!correct) return next
-    next.winnerName = player.name
-    next.players = {
-      ...next.players,
-      [senderId]: { ...player, score: player.score + 1 },
-    }
-    if (next.artistId && next.players[next.artistId]) {
-      const artist = next.players[next.artistId]
-      next.players[next.artistId] = { ...artist, score: artist.score + 1 }
-    }
-    return endTurn(next)
+    return endTurn({
+      ...next,
+      winnerName: player.name,
+      guessTimes: recordGuessTime(next, senderId, player.name),
+    })
   }
 
-  if (message.type === 'timesUp' && room.phase === 'drawing') {
+  if (message.type === 'timesUp') {
+    if (room.phase !== 'drawing') return room
+    const winner = winningGuess(room)
+    if (room.winnerName || winner) {
+      return endTurn({
+        ...room,
+        winnerName: room.winnerName ?? winner?.name ?? null,
+        guessTimes: winner
+          ? recordGuessTime(room, winner.playerId, winner.name)
+          : room.guessTimes,
+      })
+    }
     if (room.deadlineMs && Date.now() + 1500 < room.deadlineMs) return room
     return endTurn(room)
   }
 
-  if (message.type === 'nextTurn' && senderId === room.hostId && room.phase === 'reveal') {
-    if (room.round >= room.settings.rounds || room.order.length === 0) {
-      return clearTurn({ ...room, phase: 'lobby' })
+  if (message.type === 'nextTurn' && room.phase === 'reveal') {
+    const order = seatedIds(room)
+    if (room.round >= room.settings.rounds || order.length === 0) {
+      return beginVoting(room)
     }
-    const advanced: StoredRoom = { ...room, round: room.round + 1 }
-    let artistIndex = advanced.artistIndex
-    let tries = 0
-    do {
-      artistIndex = (artistIndex + 1) % advanced.order.length
-      tries += 1
-    } while (
-      !advanced.players[advanced.order[artistIndex] ?? ''] &&
-      tries <= advanced.order.length
-    )
-    return beginPick({ ...advanced, artistIndex })
+    const advanced: StoredRoom = { ...room, order, round: room.round + 1 }
+    return beginPick({ ...advanced, artistIndex: nextArtistIndex(advanced) })
   }
 
-  if (message.type === 'backToLobby' && senderId === room.hostId) {
+  if (message.type === 'vote' && room.phase === 'voting') {
+    const ranks = sanitizeRanks(message.ranks, room.collages)
+    const needed = Math.min(3, room.collages.length)
+    if (ranks.length < needed) return room
+    const next: StoredRoom = {
+      ...room,
+      votes: { ...room.votes, [senderId]: ranks },
+    }
+    if (allPlayersVoted(next)) return { ...next, phase: 'finale' }
+    return next
+  }
+
+  if (message.type === 'backToLobby' && isController(room, senderId)) {
     return clearTurn({ ...room, phase: 'lobby' })
   }
 
@@ -289,16 +464,23 @@ export function applyMessage(
 }
 
 function beginPick(room: StoredRoom): StoredRoom {
-  let artistIndex = room.artistIndex
-  while (artistIndex < room.order.length && !room.players[room.order[artistIndex] ?? '']) {
-    artistIndex += 1
+  const order = room.order.length > 0 ? room.order : seatedIds(room)
+  if (order.length === 0) return clearTurn({ ...room, phase: 'lobby', order })
+  let artistIndex = ((room.artistIndex % order.length) + order.length) % order.length
+  for (let step = 0; step < order.length; step += 1) {
+    const index = (artistIndex + step) % order.length
+    if (room.players[order[index] ?? '']) {
+      artistIndex = index
+      break
+    }
   }
-  const artistId = room.order[artistIndex]
+  const artistId = order[artistIndex]
   if (!artistId || !room.players[artistId]) {
-    return clearTurn({ ...room, phase: 'lobby' })
+    return clearTurn({ ...room, phase: 'lobby', order })
   }
   return {
     ...room,
+    order,
     phase: 'picking',
     artistIndex,
     artistId,
@@ -308,6 +490,7 @@ function beginPick(room: StoredRoom): StoredRoom {
     guesses: [],
     deadlineMs: null,
     winnerName: null,
+    drawStartedMs: null,
   }
 }
 
@@ -316,7 +499,116 @@ function endTurn(room: StoredRoom): StoredRoom {
     ...room,
     phase: 'reveal',
     deadlineMs: null,
+    drawStartedMs: null,
+    collages: archiveCollage(room),
   }
+}
+
+function beginVoting(room: StoredRoom): StoredRoom {
+  const collages = archiveCollage(room)
+  const next: StoredRoom = {
+    ...room,
+    collages,
+    votes: {},
+    artistId: null,
+    prompt: null,
+    options: null,
+    pieces: [],
+    guesses: [],
+    deadlineMs: null,
+    winnerName: null,
+    drawStartedMs: null,
+  }
+  if (collages.length < 2) {
+    return { ...next, phase: 'finale' }
+  }
+  return { ...next, phase: 'voting' }
+}
+
+function archiveCollage(room: StoredRoom): SavedCollage[] {
+  if (room.collages.some((item) => item.id === `c-${room.round}`)) return room.collages
+  const artist = room.artistId ? room.players[room.artistId] : undefined
+  return [
+    ...room.collages,
+    {
+      id: `c-${room.round}`,
+      round: room.round,
+      artistId: room.artistId ?? '',
+      artistName: artist?.name ?? room.winnerName ?? 'Artist',
+      prompt: room.prompt ?? 'untitled',
+      pieces: room.pieces,
+    },
+  ]
+}
+
+function recordGuessTime(room: StoredRoom, playerId: string, name: string): Record<string, GuessClock> {
+  const started = room.drawStartedMs ?? (room.deadlineMs ? room.deadlineMs - room.settings.turnSeconds * 1000 : Date.now())
+  const elapsed = Math.max(1, Date.now() - started)
+  const current = room.guessTimes[playerId] ?? { name, times: [] }
+  return {
+    ...room.guessTimes,
+    [playerId]: { name, times: [...current.times, elapsed] },
+  }
+}
+
+function sanitizeRanks(ranks: string[], collages: SavedCollage[]) {
+  const ids = new Set(collages.map((item) => item.id))
+  const unique: string[] = []
+  for (const id of ranks) {
+    if (!ids.has(id) || unique.includes(id)) continue
+    unique.push(id)
+    if (unique.length === 3) break
+  }
+  return unique
+}
+
+function allPlayersVoted(room: StoredRoom) {
+  const ids = Object.keys(room.players)
+  if (ids.length === 0) return false
+  return ids.every((id) => Array.isArray(room.votes[id]) && (room.votes[id]?.length ?? 0) > 0)
+}
+
+function rankFavorites(
+  collages: SavedCollage[],
+  votes: Record<string, string[]>,
+): RankedCollage[] {
+  const scores = new Map(collages.map((item) => [item.id, 0]))
+  for (const ranks of Object.values(votes)) {
+    ranks.slice(0, 3).forEach((id, index) => {
+      const points = VOTE_POINTS[index] ?? 0
+      scores.set(id, (scores.get(id) ?? 0) + points)
+    })
+  }
+  return [...collages]
+    .map((collage) => ({
+      ...collage,
+      votePoints: scores.get(collage.id) ?? 0,
+      place: 0,
+    }))
+    .sort((a, b) => b.votePoints - a.votePoints || a.round - b.round)
+    .slice(0, 3)
+    .map((collage, index) => ({ ...collage, place: index + 1 }))
+}
+
+function pickGuessChampion(guessTimes: Record<string, GuessClock>): GuessChampion | null {
+  let best: GuessChampion | null = null
+  for (const clock of Object.values(guessTimes)) {
+    if (!clock.times.length) continue
+    const averageMs = clock.times.reduce((sum, time) => sum + time, 0) / clock.times.length
+    const candidate: GuessChampion = {
+      name: clock.name,
+      averageMs,
+      correctCount: clock.times.length,
+    }
+    if (
+      !best ||
+      candidate.averageMs < best.averageMs ||
+      (candidate.averageMs === best.averageMs && candidate.correctCount > best.correctCount)
+    ) {
+      best = candidate
+    }
+  }
+  return best
 }
 
 function clearTurn(room: StoredRoom): StoredRoom {
@@ -329,8 +621,12 @@ function clearTurn(room: StoredRoom): StoredRoom {
     guesses: [],
     deadlineMs: null,
     winnerName: null,
-    order: [],
+    order: seatedIds(room),
     artistIndex: 0,
     round: 0,
+    collages: [],
+    votes: {},
+    guessTimes: {},
+    drawStartedMs: null,
   }
 }

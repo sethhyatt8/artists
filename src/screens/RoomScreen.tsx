@@ -11,7 +11,9 @@ import {
   type GameSettings,
   type Guess,
   type Player,
+  type RankedCollage,
   type RoomState,
+  type SavedCollage,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
 
@@ -21,7 +23,7 @@ type RoomScreenProps = {
 }
 
 export function RoomScreen({ session, onLeave }: RoomScreenProps) {
-  const { state, error, status, send } = useGameRoom(session)
+  const { state, error, status, send, disconnect } = useGameRoom(session)
   const [copied, setCopied] = useState(false)
   const [pieces, setPieces] = useState<CollagePiece[]>([])
   const [guessText, setGuessText] = useState('')
@@ -30,9 +32,16 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const timesUpSent = useRef(false)
 
   const connectionId = state?.selfId ?? ''
-  const isHost = Boolean(state && state.hostId === connectionId)
+  const isHost = session.intent === 'create'
   const isArtist = Boolean(state && state.artistId === connectionId)
   const seconds = useCountdown(state?.deadlineMs ?? null)
+  const winnerName =
+    state?.winnerName ?? state?.guesses.find((guess) => guess.correct)?.name ?? null
+
+  function leave() {
+    disconnect()
+    onLeave()
+  }
 
   useEffect(() => {
     if (!copied) return
@@ -48,14 +57,15 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }, [state?.phase, state?.artistId, isArtist])
 
   useEffect(() => {
-    timesUpSent.current = false
+    if (state?.deadlineMs) timesUpSent.current = false
   }, [state?.deadlineMs])
 
   useEffect(() => {
     if (state?.phase !== 'drawing' || seconds !== 0 || timesUpSent.current) return
+    if (state.winnerName || state.guesses.some((guess) => guess.correct)) return
     timesUpSent.current = true
     send({ type: 'timesUp' })
-  }, [seconds, state?.phase, send])
+  }, [seconds, state, send])
 
   function queueCanvas(next: CollagePiece[]) {
     setPieces(next)
@@ -90,7 +100,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       <main className="screen">
         <h1>Couldn’t join</h1>
         <p className="lede">{error}</p>
-        <button className="btn primary" type="button" onClick={onLeave}>
+        <button className="btn primary" type="button" onClick={leave}>
           Back home
         </button>
       </main>
@@ -107,7 +117,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             ? 'The room server isn’t reachable. Keep the web and room processes running, then try again.'
             : 'Finding the others…'}
         </p>
-        <button className="btn ghost" type="button" onClick={onLeave}>
+        <button className="btn ghost" type="button" onClick={leave}>
           Cancel
         </button>
       </main>
@@ -117,7 +127,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking' && isArtist && state.options) {
     return (
       <main className="screen room pick">
-        <TurnHeader state={state} seconds={null} onLeave={onLeave} />
+        <TurnHeader state={state} seconds={null} onLeave={leave} />
         <p className="lede">
           Pick one prompt. The {state.settings.turnSeconds}-second timer starts
           as soon as you tap it.
@@ -148,7 +158,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking') {
     return (
       <main className="screen room">
-        <TurnHeader state={state} seconds={null} onLeave={onLeave} />
+        <TurnHeader state={state} seconds={null} onLeave={leave} />
         <section className="panel">
           <h2>{state.artistName} is picking</h2>
           <p>The artist is choosing a prompt from a few categories. Get ready to guess.</p>
@@ -161,7 +171,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'drawing' && isArtist) {
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={seconds} onLeave={onLeave} prompt={state.prompt} />
+        <TurnHeader state={state} seconds={seconds} onLeave={leave} prompt={state.prompt} />
         <p className="hint">Collage that prompt. Guessers can see your board live.</p>
         <CollageStudio
           pieces={pieces}
@@ -177,7 +187,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'drawing') {
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={seconds} onLeave={onLeave} />
+        <TurnHeader state={state} seconds={seconds} onLeave={leave} />
         <p className="hint">
           {state.artistName} is collaging. Type what you think it is.
         </p>
@@ -217,10 +227,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'reveal') {
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={null} onLeave={onLeave} prompt={state.prompt} />
+        <TurnHeader state={state} seconds={null} onLeave={leave} prompt={state.prompt} />
         <p className="lede">
-          {state.winnerName
-            ? `${state.winnerName} got it!`
+          {winnerName
+            ? `${winnerName} got it!`
             : 'Time’s up — nobody guessed it.'}
         </p>
         <div className="practice-body guesser-body">
@@ -236,24 +246,38 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           <aside className="sidebar sidebar-right">
             <GuessFeed guesses={state.guesses} />
             <ScoreList players={state.players} connectionId={connectionId} />
-            {isHost ? (
-              <button
-                className="btn primary"
-                type="button"
-                onClick={() => send({ type: 'nextTurn' })}
-              >
-                {state.round >= state.settings.rounds ? 'Back to lobby' : 'Next turn'}
-              </button>
-            ) : (
-              <p className="hint">
-                {state.round >= state.settings.rounds
-                  ? 'Waiting for the host to return to the lobby.'
-                  : 'Waiting for the host to start the next turn.'}
-              </p>
-            )}
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => send({ type: 'nextTurn' })}
+            >
+              {state.round >= state.settings.rounds ? 'Vote on favorites' : 'Next turn'}
+            </button>
           </aside>
         </div>
       </main>
+    )
+  }
+
+  if (state.phase === 'voting') {
+    return (
+      <VoteScreen
+        state={state}
+        connectionId={connectionId}
+        onLeave={leave}
+        onVote={(ranks) => send({ type: 'vote', ranks })}
+      />
+    )
+  }
+
+  if (state.phase === 'finale') {
+    return (
+      <FinaleScreen
+        state={state}
+        isHost={isHost}
+        onLeave={leave}
+        onBackToLobby={() => send({ type: 'backToLobby' })}
+      />
     )
   }
 
@@ -269,7 +293,11 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         </button>
       </header>
 
-      <ScoreList players={state.players} connectionId={connectionId} hostId={state.hostId} />
+      <ScoreList
+        players={state.players}
+        connectionId={connectionId}
+        hostId={state.createdBy ?? state.hostId}
+      />
 
       <section className="panel">
         <h2>Game settings</h2>
@@ -314,7 +342,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         )}
       </section>
 
-      <button className="btn ghost leave" type="button" onClick={onLeave}>
+      <button className="btn ghost leave" type="button" onClick={leave}>
         Leave room
       </button>
     </main>
@@ -479,12 +507,234 @@ function ScoreList({
           </span>
           <span className="player-tags">
             {player.id === hostId ? <span className="tag">Host</span> : null}
-            <span className="tag">{player.score} pts</span>
           </span>
         </li>
       ))}
     </ul>
   )
+}
+
+function VoteScreen({
+  state,
+  connectionId,
+  onLeave,
+  onVote,
+}: {
+  state: RoomState
+  connectionId: string
+  onLeave: () => void
+  onVote: (ranks: string[]) => void
+}) {
+  const needed = Math.min(3, state.collages.length)
+  const alreadyVoted = Boolean(state.myVote && state.myVote.length > 0)
+  const [ranks, setRanks] = useState<(string | null)[]>([null, null, null])
+
+  function setRank(collageId: string, rankIndex: number) {
+    setRanks((current) => {
+      const next: (string | null)[] = [current[0] ?? null, current[1] ?? null, current[2] ?? null]
+      if (next[rankIndex] === collageId) {
+        next[rankIndex] = null
+        return next
+      }
+      for (let index = 0; index < 3; index += 1) {
+        if (next[index] === collageId) next[index] = null
+      }
+      next[rankIndex] = collageId
+      return next
+    })
+  }
+
+  const chosen = ranks.filter((id): id is string => Boolean(id))
+  const canSubmit = chosen.length === needed
+
+  return (
+    <main className="screen room vote">
+      <header className="room-header">
+        <div>
+          <p className="eyebrow">{state.roomCode} · Favorites</p>
+          <h1>Vote for the best collages</h1>
+        </div>
+        <button className="btn ghost compact" type="button" onClick={onLeave}>
+          Leave
+        </button>
+      </header>
+      <p className="lede">
+        {alreadyVoted
+          ? `Vote in. Waiting for everyone else (${state.votedCount} of ${state.voterCount}).`
+          : `Pick your top ${needed}. First gets 3 points, second 2, third 1.`}
+      </p>
+      <div className="vote-grid">
+        {state.collages.map((collage) => {
+          const place = alreadyVoted
+            ? (state.myVote?.indexOf(collage.id) ?? -1)
+            : ranks.indexOf(collage.id)
+          return (
+            <CollageCard
+              key={collage.id}
+              collage={collage}
+              place={place >= 0 ? place + 1 : null}
+              you={collage.artistId === connectionId}
+              voteDisabled={alreadyVoted}
+              needed={needed}
+              onRank={(rankIndex) => setRank(collage.id, rankIndex)}
+            />
+          )
+        })}
+      </div>
+      {alreadyVoted ? (
+        <p className="hint">Hang tight — the finale starts when every player has voted.</p>
+      ) : (
+        <button
+          className="btn primary"
+          type="button"
+          disabled={!canSubmit}
+          onClick={() => onVote(chosen)}
+        >
+          {canSubmit ? 'Lock in vote' : `Pick ${needed} collage${needed === 1 ? '' : 's'}`}
+        </button>
+      )}
+    </main>
+  )
+}
+
+function FinaleScreen({
+  state,
+  isHost,
+  onLeave,
+  onBackToLobby,
+}: {
+  state: RoomState
+  isHost: boolean
+  onLeave: () => void
+  onBackToLobby: () => void
+}) {
+  const champion = state.guessChampion
+  return (
+    <main className="screen room finale">
+      <header className="room-header">
+        <div>
+          <p className="eyebrow">{state.roomCode} · Finale</p>
+          <h1>Tonight’s favorites</h1>
+        </div>
+        <button className="btn ghost compact" type="button" onClick={onLeave}>
+          Leave
+        </button>
+      </header>
+
+      <section className="panel champion-card">
+        <h2>Fastest guesser</h2>
+        {champion ? (
+          <p>
+            <strong>{champion.name}</strong> averaged{' '}
+            {formatAverageMs(champion.averageMs)} on {champion.correctCount}{' '}
+            correct {champion.correctCount === 1 ? 'guess' : 'guesses'}.
+          </p>
+        ) : (
+          <p>Nobody landed a correct guess this game.</p>
+        )}
+      </section>
+
+      <section>
+        <h2>Favorite collages</h2>
+        {state.favorites.length === 0 ? (
+          <p className="hint">No collages were saved this game.</p>
+        ) : (
+          <div className="vote-grid finale-grid">
+            {state.favorites.map((collage) => (
+              <CollageCard
+                key={collage.id}
+                collage={collage}
+                place={collage.place}
+                voteDisabled
+                needed={0}
+                points={collage.votePoints}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {isHost ? (
+        <button className="btn primary" type="button" onClick={onBackToLobby}>
+          Back to lobby
+        </button>
+      ) : (
+        <p className="hint">Waiting for the host to return to the lobby.</p>
+      )}
+    </main>
+  )
+}
+
+function CollageCard({
+  collage,
+  place,
+  you,
+  voteDisabled = false,
+  needed,
+  onRank,
+  points,
+}: {
+  collage: SavedCollage | RankedCollage
+  place: number | null
+  you?: boolean
+  voteDisabled?: boolean
+  needed: number
+  onRank?: (rankIndex: number) => void
+  points?: number
+}) {
+  const labels = ['1st', '2nd', '3rd']
+  return (
+    <article className={place ? `vote-card ranked ranked-${place}` : 'vote-card'}>
+      <div className="vote-stage">
+        <CollageCanvas
+          pieces={collage.pieces}
+          selectedIds={[]}
+          onPiecesChange={() => undefined}
+          onSelect={() => undefined}
+          readOnly
+        />
+      </div>
+      <div className="vote-meta">
+        <p className="vote-prompt">{collage.prompt}</p>
+        <p className="hint">
+          {collage.artistName}
+          {you ? ' (you)' : ''}
+          {' · '}round {collage.round}
+          {typeof points === 'number' ? ` · ${points} pts` : ''}
+        </p>
+      </div>
+      {place ? <p className="vote-place">{placeLabel(place)}</p> : null}
+      {voteDisabled || !onRank ? null : (
+        <div className="rank-row">
+          {labels.slice(0, needed).map((label, index) => (
+            <button
+              key={label}
+              className={place === index + 1 ? 'btn compact primary' : 'btn ghost compact'}
+              type="button"
+              onClick={() => onRank(index)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </article>
+  )
+}
+
+function placeLabel(place: number) {
+  if (place === 1) return '1st'
+  if (place === 2) return '2nd'
+  if (place === 3) return '3rd'
+  return `${place}th`
+}
+
+function formatAverageMs(ms: number) {
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  const mins = Math.floor(seconds / 60)
+  const rest = seconds - mins * 60
+  return `${mins}m ${rest.toFixed(1)}s`
 }
 
 function formatTime(seconds: number) {
