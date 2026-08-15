@@ -95,7 +95,7 @@ const piece = {
   rotation: 0,
   color: '#e07a3d',
 }
-await put(`rooms/${code}/pieces`, [piece])
+await put(`rooms/${code}/pieces`, { 'piece-live': piece })
 
 const afterPiece = normalizeStoredRoom(await get(`rooms/${code}`))
 assert(afterPiece, `room missing after piece write: ${JSON.stringify(await get(`rooms/${code}`))}`)

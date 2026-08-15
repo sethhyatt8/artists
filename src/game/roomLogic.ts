@@ -191,6 +191,14 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
   }
 }
 
+export function toFirebaseRoom(room: StoredRoom) {
+  return {
+    ...room,
+    pieces: Object.fromEntries(room.pieces.map((piece) => [piece.id, piece])),
+    guesses: Object.fromEntries(room.guesses.map((guess) => [guess.id, guess])),
+  }
+}
+
 export function toRoomState(room: StoredRoom, selfId: string, roomCode: string): RoomState {
   const isArtist = selfId === room.artistId
   const showPrompt =

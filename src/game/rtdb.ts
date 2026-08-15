@@ -33,18 +33,6 @@ export async function rtdbSet(path: string, data: unknown, etag?: string | null)
   return response
 }
 
-export async function rtdbPatch(path: string, data: unknown) {
-  const response = await fetch(urlFor(path), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    throw new Error(`Firebase patch failed (${response.status})`)
-  }
-  return response
-}
-
 export async function rtdbTransaction<T>(
   path: string,
   updater: (current: unknown) => T | undefined,
@@ -63,126 +51,33 @@ export async function rtdbTransaction<T>(
   return { committed: false, snapshot: null }
 }
 
-function cloneValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(cloneValue)
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-        key,
-        cloneValue(item),
-      ]),
-    )
-  }
-  return value
-}
-
-function setAt(root: unknown, path: string, value: unknown): unknown {
-  if (path === '/') return value
-  const parts = path.split('/').filter(Boolean)
-  const next = (cloneValue(root) ?? {}) as Record<string, unknown>
-  let cursor = next
-  for (let i = 0; i < parts.length - 1; i += 1) {
-    const key = parts[i] ?? ''
-    const child = cursor[key]
-    cursor[key] =
-      child && typeof child === 'object' && !Array.isArray(child)
-        ? { ...(child as Record<string, unknown>) }
-        : {}
-    cursor = cursor[key] as Record<string, unknown>
-  }
-  const last = parts[parts.length - 1]
-  if (!last) return next
-  if (value === null) delete cursor[last]
-  else cursor[last] = value
-  return next
-}
-
-function patchAt(root: unknown, path: string, patch: Record<string, unknown>): unknown {
-  const base = path === '/' ? root : setAt(root, path, getAt(root, path) ?? {})
-  const targetPath = path === '/' ? [] : path.split('/').filter(Boolean)
-  const next = cloneValue(base) as Record<string, unknown>
-  let cursor = next
-  for (const key of targetPath) {
-    const child = cursor[key]
-    cursor[key] =
-      child && typeof child === 'object' && !Array.isArray(child)
-        ? { ...(child as Record<string, unknown>) }
-        : {}
-    cursor = cursor[key] as Record<string, unknown>
-  }
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === null) delete cursor[key]
-    else cursor[key] = value
-  }
-  return next
-}
-
-function getAt(root: unknown, path: string): unknown {
-  if (path === '/') return root
-  let cursor: unknown = root
-  for (const key of path.split('/').filter(Boolean)) {
-    if (!cursor || typeof cursor !== 'object') return null
-    cursor = (cursor as Record<string, unknown>)[key]
-  }
-  return cursor
-}
-
-function isPlausibleRoom(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const phase = (value as { phase?: unknown }).phase
-  return (
-    phase === 'lobby' ||
-    phase === 'picking' ||
-    phase === 'drawing' ||
-    phase === 'reveal' ||
-    phase === 'voting' ||
-    phase === 'finale'
-  )
-}
-
 export function rtdbListen(path: string, onData: (data: unknown) => void): () => void {
   const source = new EventSource(urlFor(path))
-  let tree: unknown = null
   let stopped = false
+  let timer: number | null = null
 
-  function emit(next: unknown) {
-    if (stopped) return
-    if (next == null || isPlausibleRoom(next)) {
-      tree = next
-      onData(next)
-      return
-    }
-    void rtdbGet(path)
-      .then(({ data }) => {
-        if (stopped) return
-        tree = data
-        onData(data)
-      })
-      .catch(() => undefined)
+  function refresh() {
+    if (stopped || timer !== null) return
+    timer = window.setTimeout(() => {
+      timer = null
+      void rtdbGet(path)
+        .then(({ data }) => {
+          if (!stopped) onData(data)
+        })
+        .catch(() => undefined)
+    }, 40)
   }
 
-  source.addEventListener('put', (event) => {
-    const payload = JSON.parse((event as MessageEvent).data) as {
-      path: string
-      data: unknown
-    }
-    emit(setAt(tree, payload.path, payload.data))
-  })
-
-  source.addEventListener('patch', (event) => {
-    const payload = JSON.parse((event as MessageEvent).data) as {
-      path: string
-      data: Record<string, unknown>
-    }
-    emit(patchAt(tree, payload.path, payload.data ?? {}))
-  })
-
+  source.addEventListener('put', refresh)
+  source.addEventListener('patch', refresh)
   source.onerror = () => {
     // EventSource retries automatically.
   }
+  refresh()
 
   return () => {
     stopped = true
+    if (timer !== null) window.clearTimeout(timer)
     source.close()
   }
 }
