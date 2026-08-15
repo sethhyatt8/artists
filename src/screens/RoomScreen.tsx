@@ -60,12 +60,15 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }, [state?.phase, state?.artistId, isArtist])
 
   useEffect(() => {
-    if (state?.deadlineMs) timesUpSent.current = false
-  }, [state?.deadlineMs])
+    if (state?.phase === 'drawing') return
+    timesUpSent.current = false
+  }, [state?.phase])
 
   useEffect(() => {
-    if (state?.phase !== 'drawing' || seconds !== 0 || timesUpSent.current) return
+    if (state?.phase !== 'drawing' || timesUpSent.current) return
     if (state.winnerName || state.guesses.some((guess) => guess.correct)) return
+    if (typeof state.deadlineMs !== 'number') return
+    if (Date.now() + 1500 < state.deadlineMs) return
     timesUpSent.current = true
     send({ type: 'timesUp' })
   }, [seconds, state, send])
@@ -766,15 +769,15 @@ function formatTime(seconds: number) {
 }
 
 function useCountdown(deadlineMs: number | null) {
-  const [now, setNow] = useState(() => Date.now())
+  const [, setTick] = useState(0)
 
   useEffect(() => {
     if (deadlineMs === null) return
-    setNow(Date.now())
-    const id = window.setInterval(() => setNow(Date.now()), 250)
+    setTick((tick) => tick + 1)
+    const id = window.setInterval(() => setTick((tick) => tick + 1), 250)
     return () => window.clearInterval(id)
   }, [deadlineMs])
 
   if (deadlineMs === null) return null
-  return Math.max(0, Math.ceil((deadlineMs - now) / 1000))
+  return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000))
 }

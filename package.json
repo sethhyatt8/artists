@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "build": "tsc -b && vite build",
     "test": "npx tsx src/game/roomLogic.test.ts",
+    "test:live": "npx tsx src/game/liveFlow.test.ts",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

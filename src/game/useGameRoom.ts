@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet } from './rtdb'
+import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet, rtdbTransaction } from './rtdb'
 import {
   addPlayer,
   applyMessage,
@@ -7,7 +7,6 @@ import {
   normalizeStoredRoom,
   playerCount,
   playerRecord,
-  roomPatch,
   staleGuestIds,
   toRoomState,
   type StoredRoom,
@@ -167,58 +166,70 @@ export function useGameRoom(session: RoomSession) {
       return
     }
 
-    void rtdbGet(path)
-      .then(async ({ data }) => {
-        let room = normalizeStoredRoom(data)
-        if (!room) return
-        const known = latestState.current?.players ?? []
-        if (known.length > 0) {
-          const players = { ...room.players }
-          for (const player of known) {
-            if (!players[player.id]) players[player.id] = player
+    if (message.type === 'guess') {
+      void rtdbGet(path)
+        .then(async ({ data }) => {
+          let room = normalizeStoredRoom(data)
+          if (!room) return
+          const next = applyMessage(room, id, message)
+          if ('error' in next) return
+          const added = next.guesses.filter(
+            (guess) => !room.guesses.some((item) => item.id === guess.id),
+          )
+          for (const guess of added) {
+            await rtdbSet(`${path}/guesses/${guess.id}`, guess)
           }
-          room = { ...room, players }
+          if (next.phase === room.phase) return
+          await rtdbTransaction(path, (current) => {
+            const live = normalizeStoredRoom(current)
+            if (!live) return undefined
+            const applied = applyMessage(live, id, message)
+            if ('error' in applied) return undefined
+            return applied
+          })
+        })
+        .catch(() => undefined)
+      return
+    }
+
+    void rtdbTransaction(path, (current) => {
+      let room = normalizeStoredRoom(current)
+      if (!room) return undefined
+      const known = latestState.current?.players ?? []
+      if (known.length > 0) {
+        const players = { ...room.players }
+        for (const player of known) {
+          if (!players[player.id]) players[player.id] = player
         }
-        if (!room.players[id]) {
-          await rtdbPatch(`${path}/players/${id}`, playerRecord(id, name))
-          const joined = addPlayer(room, id, name)
-          if (typeof joined !== 'string') room = joined
-        }
-        const next = applyMessage(room, id, message)
-        if ('error' in next) {
-          setError(next.error)
+        room = { ...room, players }
+      }
+      if (!room.players[id]) {
+        const joined = addPlayer(room, id, name)
+        if (typeof joined === 'string') return undefined
+        room = joined
+      }
+      const next = applyMessage(room, id, message)
+      if ('error' in next) return undefined
+      return next
+    })
+      .then((result) => {
+        if (result.committed) {
+          const room = normalizeStoredRoom(result.snapshot)
+          if (room) {
+            const view = toRoomState(room, id, code)
+            latestState.current = view
+            setState(view)
+          }
           return
         }
-        const patch = roomPatch(room, next)
-        delete patch.players
-        if (sessionRef.current.intent !== 'create') {
-          delete patch.hostId
-          delete patch.createdBy
-        }
-        if (message.type === 'nextTurn') {
-          patch.artistId = next.artistId
-          patch.artistIndex = next.artistIndex
-          patch.order = next.order
-          patch.phase = next.phase
-          patch.prompt = null
-          patch.pieces = null
-          patch.guesses = null
-          patch.winnerName = null
-          patch.deadlineMs = null
-        }
-        const addedGuesses = next.guesses.filter(
-          (guess) => !room.guesses.some((item) => item.id === guess.id),
-        )
-        if (addedGuesses.length > 0) {
-          delete patch.guesses
-          await Promise.all(
-            addedGuesses.map((guess) => rtdbSet(`${path}/guesses/${guess.id}`, guess)),
-          )
-        }
-        if (Object.keys(patch).length === 0) return
-        await rtdbPatch(path, patch)
+        const room = normalizeStoredRoom(result.snapshot)
+        if (!room) return
+        const next = applyMessage(room, id, message)
+        if ('error' in next) setError(next.error)
       })
-      .catch(() => undefined)
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Could not update the room.')
+      })
   }, [])
 
   const disconnect = useCallback(() => {

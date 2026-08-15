@@ -43,6 +43,36 @@ assert(guestDuringDraw.prompt === null, 'guesser must not see the prompt while d
 assert(guestDuringDraw.phase === 'drawing', 'guesser should still be in drawing')
 const hostDuringDraw = toRoomState(room, host, 'TEST')
 assert(hostDuringDraw.prompt === 'pizza', 'artist should see the prompt while drawing')
+assert(hostDuringDraw.phase === 'drawing', 'artist should collage after picking')
+
+const ignoredTimesUp = unwrap(applyMessage(room, guest, { type: 'timesUp' }))
+assert(ignoredTimesUp.phase === 'drawing', 'timesUp must not skip a turn that still has time')
+assert(ignoredTimesUp.prompt === 'pizza', 'early timesUp must leave the prompt in place')
+
+const missingDeadline = unwrap(
+  applyMessage(
+    { ...room, deadlineMs: null, drawStartedMs: Date.now() },
+    host,
+    { type: 'timesUp' },
+  ),
+)
+assert(
+  missingDeadline.phase === 'drawing',
+  'timesUp without a passed deadline must keep the collage turn',
+)
+
+const expired = unwrap(
+  applyMessage(
+    {
+      ...room,
+      deadlineMs: Date.now() - 1000,
+      drawStartedMs: Date.now() - 90_000,
+    },
+    host,
+    { type: 'timesUp' },
+  ),
+)
+assert(expired.phase === 'reveal', 'timesUp after the deadline should reveal')
 
 room = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
 assert(room.phase === 'reveal', `expected reveal, got ${room.phase}`)

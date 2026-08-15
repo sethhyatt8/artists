@@ -261,7 +261,24 @@ function isController(room: StoredRoom, senderId: string) {
 }
 
 function winningGuess(room: StoredRoom) {
-  return [...room.guesses].reverse().find((guess) => guess.correct) ?? null
+  if (!room.prompt) return null
+  return (
+    [...room.guesses].reverse().find(
+      (guess) => guess.correct && answersMatch(guess.text, room.prompt ?? ''),
+    ) ?? null
+  )
+}
+
+function turnHasExpired(room: StoredRoom) {
+  const slack = 1500
+  const turnMs = room.settings.turnSeconds * 1000
+  if (typeof room.deadlineMs === 'number') {
+    return Date.now() + slack >= room.deadlineMs
+  }
+  if (typeof room.drawStartedMs === 'number') {
+    return Date.now() - room.drawStartedMs >= turnMs - slack
+  }
+  return false
 }
 
 const ROOM_KEYS: (keyof StoredRoom)[] = [
@@ -429,16 +446,14 @@ export function applyMessage(
   if (message.type === 'timesUp') {
     if (room.phase !== 'drawing') return room
     const winner = winningGuess(room)
-    if (room.winnerName || winner) {
+    if (winner) {
       return endTurn({
         ...room,
-        winnerName: room.winnerName ?? winner?.name ?? null,
-        guessTimes: winner
-          ? recordGuessTime(room, winner.playerId, winner.name)
-          : room.guessTimes,
+        winnerName: room.winnerName ?? winner.name,
+        guessTimes: recordGuessTime(room, winner.playerId, winner.name),
       })
     }
-    if (room.deadlineMs && Date.now() + 1500 < room.deadlineMs) return room
+    if (!turnHasExpired(room)) return room
     return endTurn(room)
   }
 

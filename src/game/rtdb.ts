@@ -49,7 +49,7 @@ export async function rtdbTransaction<T>(
   path: string,
   updater: (current: unknown) => T | undefined,
 ): Promise<{ committed: boolean; snapshot: T | unknown }> {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     const { data, etag } = await rtdbGet(path)
     const next = updater(data)
     if (next === undefined) return { committed: false, snapshot: data }
