@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from './protocol'
-import { maskSecret } from './prompts'
+import { answersMatch, maskSecret } from './prompts'
 import {
   addPlayer,
   applyMessage,
@@ -157,6 +157,16 @@ assert((guestNext.options?.length ?? 0) > 0, 'new artist must get prompt choices
 assert(maskSecret('ice cream') === '*** *****', 'mask should keep spaces')
 assert(maskSecret('Spider-Man') === '******-***', 'mask should keep punctuation')
 assert(maskSecret('pizza') === '*****', 'mask should cover letters')
+
+assert(answersMatch('pizza', 'pizza'), 'exact guesses should count')
+assert(answersMatch('brushing teeth', 'brushing teeth'), 'the full prompt should count')
+assert(answersMatch('brush teeth', 'brushing teeth'), 'close wording of the full idea should count')
+assert(!answersMatch('teeth', 'brushing teeth'), 'one leftover word must not count')
+assert(!answersMatch('brushing', 'brushing teeth'), 'the first word alone must not count')
+assert(!answersMatch('ice', 'ice cream'), 'one word of a two-word prompt must not count')
+assert(answersMatch('ice cream', 'ice cream'), 'both words of a two-word prompt should count')
+assert(!answersMatch('lion', 'The Lion King'), 'one title word must not count')
+assert(answersMatch('lion king', 'The Lion King'), 'the content words of a title should count')
 
 const cam = 'guest-ccc'
 let multi = emptyRoom(host, 'Ada')

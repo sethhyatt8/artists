@@ -171,7 +171,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       <main className="screen room pick">
         <TurnHeader state={state} seconds={null} onLeave={leave} />
         <p className="lede">
-          Pick one prompt. The {state.settings.turnSeconds}-second timer starts
+          Pick one prompt. The {formatTurnLength(state.settings.turnSeconds)} timer starts
           as soon as you tap it.
         </p>
         <div className="pick-grid">
@@ -225,7 +225,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         <CollageStudio
           pieces={pieces}
           onPiecesChange={queueCanvas}
-          hint={`You have ${state.settings.turnSeconds} seconds. Keep going until everyone guesses it or time runs out.`}
+          hint={`You have ${formatTurnLength(state.settings.turnSeconds)}. Keep going until everyone guesses it or time runs out.`}
           extraRight={<GuessFeed guesses={state.guesses} />}
           shapeSet={state.settings.shapeSet}
         />
@@ -383,7 +383,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
                 ? 'Letters A–Z'
                 : 'Weird junk'}
             {' · '}
-            {state.settings.turnSeconds} seconds
+            {formatTurnLength(state.settings.turnSeconds)}
             {' · '}
             {state.settings.rounds} {state.settings.rounds === 1 ? 'round' : 'rounds'}
           </p>
@@ -466,14 +466,14 @@ function LobbySettings({
       </div>
 
       <label className="field">
-        <span>Seconds per turn</span>
+        <span>Time per turn</span>
         <select
           value={settings.turnSeconds}
           onChange={(event) => patch({ turnSeconds: Number(event.target.value) })}
         >
           {TURN_SECONDS_OPTIONS.map((seconds) => (
             <option key={seconds} value={seconds}>
-              {seconds}
+              {formatTurnLength(seconds)}
             </option>
           ))}
         </select>
@@ -837,6 +837,16 @@ function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+function formatTurnLength(seconds: number) {
+  if (seconds % 60 === 0) {
+    const mins = seconds / 60
+    return mins === 1 ? '1 minute' : `${mins} minutes`
+  }
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins} min ${secs} sec`
 }
 
 function useTurnCountdown(state: RoomState | null) {

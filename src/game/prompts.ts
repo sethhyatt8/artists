@@ -540,6 +540,12 @@ export function normalizeAnswer(value: string) {
 }
 
 function stem(word: string) {
+  if (word.length >= 6 && word.endsWith('ing')) {
+    return word.slice(0, -3)
+  }
+  if (word.length >= 5 && word.endsWith('ed')) {
+    return word.slice(0, -2)
+  }
   if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) {
     return word.slice(0, -1)
   }
@@ -554,6 +560,11 @@ export function contentWords(value: string) {
 }
 
 export function answersMatch(guess: string, prompt: string) {
+  const guessNorm = normalizeAnswer(guess)
+  const promptNorm = normalizeAnswer(prompt)
+  if (!guessNorm || !promptNorm) return false
+  if (guessNorm === promptNorm) return true
+
   const guessWords = contentWords(guess)
   const promptWords = contentWords(prompt)
   if (guessWords.length === 0 || promptWords.length === 0) return false
@@ -561,9 +572,12 @@ export function answersMatch(guess: string, prompt: string) {
   const guessSet = new Set(guessWords)
   if (promptWords.every((word) => guessSet.has(word))) return true
 
-  const hits = promptWords.filter((word) => guessSet.has(word))
-  const needed = Math.ceil(promptWords.length / 2)
-  return hits.length >= needed && hits.some((word) => word.length >= 3)
+  if (promptWords.length >= 4) {
+    const longest = [...promptWords].sort((a, b) => b.length - a.length)[0]
+    const hits = promptWords.filter((word) => guessSet.has(word))
+    return Boolean(longest && guessSet.has(longest) && hits.length >= promptWords.length - 1)
+  }
+  return false
 }
 
 export function maskSecret(value: string) {

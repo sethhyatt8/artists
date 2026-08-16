@@ -8,7 +8,7 @@ export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const MAX_GUESS_LENGTH = 48
 export const MIN_ROUNDS = 1
 export const MAX_ROUNDS = 10
-export const TURN_SECONDS_OPTIONS = [30, 45, 60, 90, 120] as const
+export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180] as const
 
 export const SHAPE_SET = {
   regular: 'regular',
