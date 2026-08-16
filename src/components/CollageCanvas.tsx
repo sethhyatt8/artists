@@ -51,6 +51,13 @@ type Drag =
       origWidth: number
       origHeight: number
     }
+  | {
+      mode: 'spin'
+      ids: string[]
+      centerX: number
+      centerY: number
+      lastAngle: number
+    }
 
 type PendingPress = {
   pointerId: number
@@ -73,6 +80,13 @@ const DRAG_SLOP = 10
 const MENU_WIDTH = 188
 const MENU_HEIGHT = 176
 
+function wheelScaleFactor(event: WheelEvent) {
+  let dy = event.deltaY
+  if (event.deltaMode === 1) dy *= 16
+  if (event.deltaMode === 2) dy *= 80
+  return Math.min(1.18, Math.max(0.85, Math.exp(-dy * 0.0022)))
+}
+
 export function CollageCanvas({
   pieces,
   selectedIds,
@@ -92,6 +106,8 @@ export function CollageCanvas({
   const lassoRef = useRef<ReturnType<typeof normalizeRect> | null>(null)
   const [menu, setMenu] = useState<PieceMenu | null>(null)
   const [lasso, setLasso] = useState<ReturnType<typeof normalizeRect> | null>(null)
+  const wheelBurstRef = useRef(false)
+  const wheelTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     piecesRef.current = pieces
@@ -203,6 +219,111 @@ export function CollageCanvas({
     dragRef.current = { mode: 'move', ids, lastX: x, lastY: y }
   }
 
+  function idsForEdit(x: number, y: number) {
+    const hit = pieceAt(x, y)
+    if (hit && selectedRef.current.includes(hit.id)) return selectedRef.current
+    if (hit) return [hit.id]
+    return selectedRef.current
+  }
+
+  function scaleIds(ids: string[], factor: number) {
+    const idSet = new Set(ids)
+    let changed = false
+    const next = piecesRef.current.map((piece) => {
+      if (!idSet.has(piece.id)) return piece
+      const width = clampPieceSize(piece.width * factor)
+      if (width === piece.width) return piece
+      changed = true
+      const ratio = piece.height / piece.width
+      return { ...piece, width, height: clampPieceSize(width * ratio) }
+    })
+    if (changed) commitPieces(next)
+  }
+
+  function startSpin(ids: string[], x: number, y: number) {
+    const targets = piecesRef.current.filter((piece) => ids.includes(piece.id))
+    const box = groupBounds(targets)
+    const centerX = box ? box.x + box.width / 2 : x
+    const centerY = box ? box.y + box.height / 2 : y
+    setMenu(null)
+    clearPending()
+    onGestureStart?.()
+    dragRef.current = {
+      mode: 'spin',
+      ids,
+      centerX,
+      centerY,
+      lastAngle: Math.atan2(y - centerY, x - centerX),
+    }
+  }
+
+  function beginMiddleSpin(
+    event: PointerEvent<SVGElement>,
+    x: number,
+    y: number,
+    hitId: string | null,
+  ) {
+    const selected = selectedRef.current
+    let ids: string[]
+    if (hitId && selected.includes(hitId)) ids = selected
+    else if (hitId) {
+      ids = [hitId]
+      selectedRef.current = ids
+      onSelect(ids)
+    } else if (selected.length > 0) ids = selected
+    else return
+
+    event.preventDefault()
+    svgRef.current?.setPointerCapture(event.pointerId)
+    startSpin(ids, x, y)
+  }
+
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || readOnly) return
+
+    function onWheel(event: WheelEvent) {
+      if (event.ctrlKey || event.metaKey) return
+      if (dragRef.current) return
+      if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return
+      const { x, y } = toCanvas(event.clientX, event.clientY)
+      const ids = idsForEdit(x, y)
+      if (ids.length === 0) return
+      event.preventDefault()
+      const factor = wheelScaleFactor(event)
+      if (Math.abs(factor - 1) < 0.002) return
+      if (!wheelBurstRef.current) {
+        wheelBurstRef.current = true
+        onGestureStart?.()
+      }
+      scaleIds(ids, factor)
+      if (wheelTimerRef.current !== null) window.clearTimeout(wheelTimerRef.current)
+      wheelTimerRef.current = window.setTimeout(() => {
+        wheelBurstRef.current = false
+        wheelTimerRef.current = null
+        onGestureEnd?.()
+      }, 280)
+    }
+
+    function preventMiddleAutoscroll(event: globalThis.MouseEvent) {
+      if (event.button === 1) event.preventDefault()
+    }
+
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('mousedown', preventMiddleAutoscroll)
+    svg.addEventListener('auxclick', preventMiddleAutoscroll)
+    return () => {
+      svg.removeEventListener('wheel', onWheel)
+      svg.removeEventListener('mousedown', preventMiddleAutoscroll)
+      svg.removeEventListener('auxclick', preventMiddleAutoscroll)
+      if (wheelTimerRef.current !== null) window.clearTimeout(wheelTimerRef.current)
+      if (wheelBurstRef.current) {
+        wheelBurstRef.current = false
+        onGestureEnd?.()
+      }
+    }
+  }, [commitPieces, onGestureEnd, onGestureStart, pieceAt, readOnly, toCanvas])
+
   function isAdditive(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) {
     return event.shiftKey || event.ctrlKey || event.metaKey
   }
@@ -213,6 +334,10 @@ export function CollageCanvas({
     if (event.button === 2) return
 
     const { x, y } = toCanvas(event.clientX, event.clientY)
+    if (event.button === 1) {
+      beginMiddleSpin(event, x, y, pieceAt(x, y)?.id ?? null)
+      return
+    }
     const hit = pieceAt(x, y)
     if (hit) {
       beginPiecePress(event, hit.id, x, y)
@@ -237,6 +362,10 @@ export function CollageCanvas({
     event.stopPropagation()
     if (event.button === 2) return
     const { x, y } = toCanvas(event.clientX, event.clientY)
+    if (event.button === 1) {
+      beginMiddleSpin(event, x, y, selectedRef.current[0] ?? null)
+      return
+    }
     svgRef.current?.setPointerCapture(event.pointerId)
     startMove(selectedRef.current, x, y)
   }
@@ -248,6 +377,10 @@ export function CollageCanvas({
       return
     }
     const { x, y } = toCanvas(event.clientX, event.clientY)
+    if (event.button === 1) {
+      beginMiddleSpin(event, x, y, id)
+      return
+    }
     beginPiecePress(event, id, x, y)
   }
 
@@ -300,7 +433,7 @@ export function CollageCanvas({
     piece: CollagePiece,
   ) {
     event.stopPropagation()
-    if (event.button === 2) return
+    if (event.button !== 0) return
     clearPending()
     setMenu(null)
     const { x, y } = toCanvas(event.clientX, event.clientY)
@@ -319,7 +452,7 @@ export function CollageCanvas({
     piece: CollagePiece,
   ) {
     event.stopPropagation()
-    if (event.button === 2) return
+    if (event.button !== 0) return
     clearPending()
     setMenu(null)
     const { x, y } = toCanvas(event.clientX, event.clientY)
@@ -377,6 +510,21 @@ export function CollageCanvas({
       return
     }
 
+    if (drag.mode === 'spin') {
+      const angle = Math.atan2(y - drag.centerY, x - drag.centerX)
+      let delta = ((angle - drag.lastAngle) * 180) / Math.PI
+      if (delta > 180) delta -= 360
+      if (delta < -180) delta += 360
+      const spinning = new Set(drag.ids)
+      commitPieces(
+        piecesRef.current.map((piece) =>
+          spinning.has(piece.id) ? { ...piece, rotation: piece.rotation + delta } : piece,
+        ),
+      )
+      drag.lastAngle = angle
+      return
+    }
+
     const piece = piecesRef.current.find((item) => item.id === drag.id)
     if (!piece) return
 
@@ -401,7 +549,12 @@ export function CollageCanvas({
     const drag = dragRef.current
     clearPending()
     dragRef.current = null
-    if (drag?.mode === 'move' || drag?.mode === 'rotate' || drag?.mode === 'scale') {
+    if (
+      drag?.mode === 'move' ||
+      drag?.mode === 'rotate' ||
+      drag?.mode === 'scale' ||
+      drag?.mode === 'spin'
+    ) {
       onGestureEnd?.()
     }
 
