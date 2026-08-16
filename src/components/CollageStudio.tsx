@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { CollageCanvas } from './CollageCanvas'
 import { PieceGlyph } from './PieceGlyph'
 import {
@@ -23,6 +23,83 @@ type CollageStudioProps = {
   shapeSet?: ShapeSet | 'all'
 }
 
+function clonePieces(pieces: CollagePiece[]) {
+  return pieces.map((piece) => ({ ...piece }))
+}
+
+function samePieces(left: CollagePiece[], right: CollagePiece[]) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function typingInField(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+}
+
+function useCollageHistory(
+  pieces: CollagePiece[],
+  onPiecesChange: (pieces: CollagePiece[]) => void,
+) {
+  const piecesRef = useRef(pieces)
+  piecesRef.current = pieces
+  const past = useRef<CollagePiece[][]>([])
+  const future = useRef<CollagePiece[][]>([])
+  const gestureBaseline = useRef<CollagePiece[] | null>(null)
+
+  const apply = useCallback(
+    (next: CollagePiece[]) => {
+      piecesRef.current = next
+      onPiecesChange(next)
+    },
+    [onPiecesChange],
+  )
+
+  const capture = useCallback(() => {
+    past.current.push(clonePieces(piecesRef.current))
+    if (past.current.length > 80) past.current.shift()
+    future.current = []
+  }, [])
+
+  const commit = useCallback(
+    (next: CollagePiece[]) => {
+      if (samePieces(next, piecesRef.current)) return
+      capture()
+      apply(next)
+    },
+    [apply, capture],
+  )
+
+  const beginGesture = useCallback(() => {
+    gestureBaseline.current = clonePieces(piecesRef.current)
+  }, [])
+
+  const endGesture = useCallback(() => {
+    const baseline = gestureBaseline.current
+    gestureBaseline.current = null
+    if (!baseline || samePieces(baseline, piecesRef.current)) return
+    past.current.push(baseline)
+    if (past.current.length > 80) past.current.shift()
+    future.current = []
+  }, [])
+
+  const undo = useCallback(() => {
+    const prev = past.current.pop()
+    if (!prev) return
+    future.current.push(clonePieces(piecesRef.current))
+    apply(prev)
+  }, [apply])
+
+  const redo = useCallback(() => {
+    const next = future.current.pop()
+    if (!next) return
+    past.current.push(clonePieces(piecesRef.current))
+    apply(next)
+  }, [apply])
+
+  return { commit, capture, beginGesture, endGesture, undo, redo }
+}
+
 export function CollageStudio({
   pieces,
   onPiecesChange,
@@ -33,15 +110,52 @@ export function CollageStudio({
 }: CollageStudioProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [color, setColor] = useState<string>(PALETTE[0])
+  const { commit, capture, beginGesture, endGesture, undo, redo } = useCollageHistory(
+    pieces,
+    onPiecesChange,
+  )
   const showRegular = shapeSet === 'regular' || shapeSet === 'all'
   const showWeird = shapeSet === 'weird' || shapeSet === 'all'
   const showLetters = shapeSet === 'letters' || shapeSet === 'all'
   const selected = selectedIds.length > 0 && !locked
 
+  useEffect(() => {
+    setSelectedIds((ids) => {
+      const keep = ids.filter((id) => pieces.some((piece) => piece.id === id))
+      return keep.length === ids.length ? ids : keep
+    })
+  }, [pieces])
+
+  useEffect(() => {
+    if (locked) return
+    function onKey(event: KeyboardEvent) {
+      if (typingInField(event.target)) return
+      const mod = event.metaKey || event.ctrlKey
+      if (!mod) return
+      const key = event.key.toLowerCase()
+      if (key === 'z' && event.shiftKey) {
+        event.preventDefault()
+        redo()
+        return
+      }
+      if (key === 'z') {
+        event.preventDefault()
+        undo()
+        return
+      }
+      if (key === 'y') {
+        event.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [locked, redo, undo])
+
   function addPiece(kind: PieceKind) {
     if (locked) return
     const piece = createPiece(kind, color, pieces.length)
-    onPiecesChange([...pieces, piece])
+    commit([...pieces, piece])
     setSelectedIds([piece.id])
   }
 
@@ -49,7 +163,7 @@ export function CollageStudio({
     setColor(next)
     if (locked || selectedIds.length === 0) return
     const idSet = new Set(selectedIds)
-    onPiecesChange(
+    commit(
       pieces.map((piece) =>
         idSet.has(piece.id) ? { ...piece, color: next } : piece,
       ),
@@ -59,7 +173,7 @@ export function CollageStudio({
   function rotateSelected(delta: number) {
     if (locked || selectedIds.length === 0) return
     const idSet = new Set(selectedIds)
-    onPiecesChange(
+    commit(
       pieces.map((piece) =>
         idSet.has(piece.id)
           ? { ...piece, rotation: piece.rotation + delta }
@@ -71,7 +185,7 @@ export function CollageStudio({
   function scaleSelected(factor: number) {
     if (locked || selectedIds.length === 0) return
     const idSet = new Set(selectedIds)
-    onPiecesChange(
+    commit(
       pieces.map((piece) => {
         if (!idSet.has(piece.id)) return piece
         const width = clampPieceSize(piece.width * factor)
@@ -88,7 +202,7 @@ export function CollageStudio({
   function deleteSelected() {
     if (locked || selectedIds.length === 0) return
     const idSet = new Set(selectedIds)
-    onPiecesChange(pieces.filter((piece) => !idSet.has(piece.id)))
+    commit(pieces.filter((piece) => !idSet.has(piece.id)))
     setSelectedIds([])
   }
 
@@ -163,6 +277,9 @@ export function CollageStudio({
           selectedIds={locked ? [] : selectedIds}
           onPiecesChange={onPiecesChange}
           onSelect={setSelectedIds}
+          onGestureStart={beginGesture}
+          onGestureEnd={endGesture}
+          onBeforeMutate={capture}
           readOnly={locked}
         />
       </div>

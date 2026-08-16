@@ -29,7 +29,7 @@ export function PracticeScreen({ onLeave }: PracticeScreenProps) {
       <CollageStudio
         pieces={pieces}
         onPiecesChange={setPieces}
-        hint="Drag empty canvas to lasso a group. Shift-click adds to the selection. Right-click a piece for duplicate and layers."
+        hint="Drag empty canvas to lasso a group. Shift-click adds to the selection. Right-click a piece for duplicate and layers. Ctrl+Z / Cmd+Z undoes."
       />
     </main>
   )

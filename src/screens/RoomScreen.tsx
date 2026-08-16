@@ -223,6 +223,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           {guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
         </p>
         <CollageStudio
+          key={turnKey}
           pieces={pieces}
           onPiecesChange={queueCanvas}
           hint={`You have ${formatTurnLength(state.settings.turnSeconds)}. Keep going until everyone guesses it or time runs out.`}

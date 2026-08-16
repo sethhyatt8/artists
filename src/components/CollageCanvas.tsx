@@ -20,6 +20,9 @@ type CollageCanvasProps = {
   onPiecesChange: (pieces: CollagePiece[]) => void
   onSelect: (ids: string[]) => void
   readOnly?: boolean
+  onGestureStart?: () => void
+  onGestureEnd?: () => void
+  onBeforeMutate?: () => void
 }
 
 type Drag =
@@ -76,6 +79,9 @@ export function CollageCanvas({
   onPiecesChange,
   onSelect,
   readOnly = false,
+  onGestureStart,
+  onGestureEnd,
+  onBeforeMutate,
 }: CollageCanvasProps) {
   const frameRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -193,6 +199,7 @@ export function CollageCanvas({
 
   function startMove(ids: string[], x: number, y: number) {
     setMenu(null)
+    onGestureStart?.()
     dragRef.current = { mode: 'move', ids, lastX: x, lastY: y }
   }
 
@@ -298,6 +305,7 @@ export function CollageCanvas({
     setMenu(null)
     const { x, y } = toCanvas(event.clientX, event.clientY)
     svgRef.current?.setPointerCapture(event.pointerId)
+    onGestureStart?.()
     dragRef.current = {
       mode: 'rotate',
       id: piece.id,
@@ -316,6 +324,7 @@ export function CollageCanvas({
     setMenu(null)
     const { x, y } = toCanvas(event.clientX, event.clientY)
     svgRef.current?.setPointerCapture(event.pointerId)
+    onGestureStart?.()
     dragRef.current = {
       mode: 'scale',
       id: piece.id,
@@ -392,6 +401,9 @@ export function CollageCanvas({
     const drag = dragRef.current
     clearPending()
     dragRef.current = null
+    if (drag?.mode === 'move' || drag?.mode === 'rotate' || drag?.mode === 'scale') {
+      onGestureEnd?.()
+    }
 
     if (drag?.mode === 'lasso') {
       const rect = lassoRef.current
@@ -435,6 +447,7 @@ export function CollageCanvas({
 
     if (action === 'duplicate') {
       const copies = current.filter((piece) => idSet.has(piece.id)).map(duplicatePiece)
+      onBeforeMutate?.()
       commitPieces([...current, ...copies])
       onSelect(copies.map((piece) => piece.id))
       return
@@ -443,6 +456,7 @@ export function CollageCanvas({
     if (action === 'front') {
       const rest = current.filter((piece) => !idSet.has(piece.id))
       const moving = current.filter((piece) => idSet.has(piece.id))
+      onBeforeMutate?.()
       commitPieces([...rest, ...moving])
       onSelect(ids)
       return
@@ -451,11 +465,13 @@ export function CollageCanvas({
     if (action === 'back') {
       const rest = current.filter((piece) => !idSet.has(piece.id))
       const moving = current.filter((piece) => idSet.has(piece.id))
+      onBeforeMutate?.()
       commitPieces([...moving, ...rest])
       onSelect(ids)
       return
     }
 
+    onBeforeMutate?.()
     commitPieces(current.filter((piece) => !idSet.has(piece.id)))
     onSelect([])
   }
