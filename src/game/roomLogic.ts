@@ -15,6 +15,7 @@ import {
 import {
   answersMatch,
   dealPromptOptions,
+  maskSecret,
   optionExists,
   type CategoryOptions,
 } from './prompts'
@@ -227,7 +228,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     prompt: showPrompt ? room.prompt : null,
     options: showOptions ? room.options : null,
     pieces: room.phase === 'lobby' ? [] : room.pieces,
-    guesses: room.guesses,
+    guesses: visibleGuesses(room, selfId),
     deadlineMs: room.deadlineMs,
     drawStartedMs: room.drawStartedMs,
     winnerName: room.winnerName,
@@ -270,13 +271,43 @@ function isController(room: StoredRoom, senderId: string) {
   return senderId === room.createdBy || senderId === room.hostId
 }
 
-function winningGuess(room: StoredRoom) {
-  if (!room.prompt) return null
-  return (
-    [...room.guesses].reverse().find(
-      (guess) => guess.correct && answersMatch(guess.text, room.prompt ?? ''),
-    ) ?? null
-  )
+function guesserIds(room: StoredRoom) {
+  return Object.keys(room.players).filter((id) => id !== room.artistId)
+}
+
+function hasCorrectGuess(room: StoredRoom, playerId: string) {
+  return room.guesses.some((guess) => guess.correct && guess.playerId === playerId)
+}
+
+function correctGuesserNames(room: StoredRoom) {
+  const names: string[] = []
+  const seen = new Set<string>()
+  for (const guess of room.guesses) {
+    if (!guess.correct || seen.has(guess.playerId)) continue
+    seen.add(guess.playerId)
+    names.push(guess.name)
+  }
+  return names
+}
+
+function allGuessersCorrect(room: StoredRoom) {
+  const guessers = guesserIds(room)
+  return guessers.length > 0 && guessers.every((id) => hasCorrectGuess(room, id))
+}
+
+function formatNameList(names: string[]) {
+  if (names.length === 0) return null
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
+}
+
+function visibleGuesses(room: StoredRoom, selfId: string) {
+  if (room.phase !== 'drawing') return room.guesses
+  return room.guesses.map((guess) => {
+    if (!guess.correct || guess.playerId === selfId) return guess
+    return { ...guess, text: maskSecret(guess.text) }
+  })
 }
 
 function turnHasExpired(room: StoredRoom) {
@@ -294,7 +325,7 @@ export function isSpuriousDrawEnd(prev: StoredRoom, next: StoredRoom) {
   if (prev.phase !== 'drawing') return false
   if (next.phase === 'drawing') return false
   if (next.winnerName) return false
-  if (winningGuess(prev) || winningGuess(next)) return false
+  if (allGuessersCorrect(prev) || allGuessersCorrect(next)) return false
   if (turnHasExpired(prev)) return false
   if (next.collages.length > prev.collages.length) return false
   return true
@@ -443,6 +474,7 @@ export function applyMessage(
   if (message.type === 'guess' && room.phase === 'drawing' && senderId !== room.artistId) {
     const text = message.text.trim()
     if (!text || !room.prompt) return room
+    if (hasCorrectGuess(room, senderId)) return room
     const correct = answersMatch(text, room.prompt)
     const guessSerial = room.guessSerial + 1
     const guess: Guess = {
@@ -453,34 +485,25 @@ export function applyMessage(
       correct,
     }
     const guesses = [...room.guesses, guess].slice(-40)
-    const next: StoredRoom = { ...room, guesses, guessSerial }
-    if (!correct || tooEarlyToEndDrawing(room)) return next
-    return endTurn({
+    let next: StoredRoom = { ...room, guesses, guessSerial }
+    if (!correct) return next
+    next = {
       ...next,
-      winnerName: player.name,
       guessTimes: recordGuessTime(next, senderId, player.name),
-    })
+    }
+    if (tooEarlyToEndDrawing(next) || !allGuessersCorrect(next)) return next
+    return endTurn(next)
   }
 
   if (message.type === 'timesUp') {
     if (room.phase !== 'drawing') return room
-    if (tooEarlyToEndDrawing(room)) return room
-    const winner = winningGuess(room)
-    if (winner) {
-      return endTurn({
-        ...room,
-        winnerName: room.winnerName ?? winner.name,
-        guessTimes: recordGuessTime(room, winner.playerId, winner.name),
-      })
-    }
-    if (!turnHasExpired(room)) return room
+    if (allGuessersCorrect(room) && !tooEarlyToEndDrawing(room)) return endTurn(room)
+    if (tooEarlyToEndDrawing(room) || !turnHasExpired(room)) return room
     return endTurn(room)
   }
 
   if (message.type === 'nextTurn') {
-    const ended =
-      room.phase === 'reveal' || Boolean(room.winnerName) || Boolean(winningGuess(room))
-    if (!ended) return room
+    if (room.phase !== 'reveal') return room
     const order = rotationOrder(room)
     if (order.length === 0) return room
     if (room.round >= room.settings.rounds) {
@@ -545,6 +568,7 @@ function endTurn(room: StoredRoom): StoredRoom {
     phase: 'reveal',
     deadlineMs: null,
     drawStartedMs: null,
+    winnerName: formatNameList(correctGuesserNames(room)),
     collages: archiveCollage(room),
   }
 }

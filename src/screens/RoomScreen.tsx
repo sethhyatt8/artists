@@ -189,14 +189,21 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }
 
   if (state.phase === 'drawing' && isArtist) {
+    const guesserCount = Math.max(0, state.players.length - 1)
+    const solvedCount = new Set(
+      state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
+    ).size
     return (
       <main className="screen practice">
         <TurnHeader state={state} seconds={seconds} onLeave={leave} prompt={state.prompt} />
-        <p className="hint">Collage that prompt. Guessers can see your board live.</p>
+        <p className="hint">
+          Collage that prompt. Guessers can see your board live.
+          {guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
+        </p>
         <CollageStudio
           pieces={pieces}
           onPiecesChange={queueCanvas}
-          hint={`You have ${state.settings.turnSeconds} seconds. Watch the guesses on the right and keep adding pieces until someone gets it.`}
+          hint={`You have ${state.settings.turnSeconds} seconds. Keep going until everyone guesses it or time runs out.`}
           extraRight={<GuessFeed guesses={state.guesses} />}
           shapeSet={state.settings.shapeSet}
         />
@@ -205,11 +212,21 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }
 
   if (state.phase === 'drawing') {
+    const alreadyGotIt = state.guesses.some(
+      (guess) => guess.correct && guess.playerId === connectionId,
+    )
+    const guesserCount = Math.max(0, state.players.length - 1)
+    const solvedCount = new Set(
+      state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
+    ).size
     return (
       <main className="screen practice">
         <TurnHeader state={state} seconds={seconds} onLeave={leave} />
         <p className="hint">
-          {state.artistName} is collaging. Type what you think it is.
+          {alreadyGotIt
+            ? 'You got it! Don’t say the word out loud.'
+            : `${state.artistName} is collaging. Type what you think it is.`}
+          {guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
         </p>
         <div className="practice-body guesser-body">
           <div className="canvas-stage">
@@ -223,25 +240,29 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           </div>
           <aside className="sidebar sidebar-right">
             <GuessFeed guesses={state.guesses} />
-            <form className="guess-form" onSubmit={sendGuess} autoComplete="off">
-              <label className="field">
-                <span>Your guess</span>
-                <input
-                  value={guessText}
-                  maxLength={MAX_GUESS_LENGTH}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  name="artists-guess"
-                  placeholder="Type a guess"
-                  onChange={(event) => setGuessText(event.target.value)}
-                />
-              </label>
-              <button className="btn primary" type="submit">
-                Guess
-              </button>
-            </form>
+            {alreadyGotIt ? (
+              <p className="hint">Your guess is in. Hang tight until the turn ends.</p>
+            ) : (
+              <form className="guess-form" onSubmit={sendGuess} autoComplete="off">
+                <label className="field">
+                  <span>Your guess</span>
+                  <input
+                    value={guessText}
+                    maxLength={MAX_GUESS_LENGTH}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    name="artists-guess"
+                    placeholder="Type a guess"
+                    onChange={(event) => setGuessText(event.target.value)}
+                  />
+                </label>
+                <button className="btn primary" type="submit">
+                  Guess
+                </button>
+              </form>
+            )}
           </aside>
         </div>
       </main>
@@ -252,11 +273,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     return (
       <main className="screen practice">
         <TurnHeader state={state} seconds={null} onLeave={leave} prompt={state.prompt} />
-        <p className="lede">
-          {winnerName
-            ? `${winnerName} got it!`
-            : 'Time’s up — nobody guessed it.'}
-        </p>
+        <p className="lede">{revealLede(state, winnerName)}</p>
         <div className="practice-body guesser-body">
           <div className="canvas-stage">
             <CollageCanvas
@@ -491,6 +508,20 @@ function TurnHeader({
       </div>
     </header>
   )
+}
+
+function revealLede(state: RoomState, winnerName: string | null) {
+  const guesserIds = state.players
+    .filter((player) => player.id !== state.artistId)
+    .map((player) => player.id)
+  const solvers = new Set(
+    state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
+  )
+  if (guesserIds.length > 1 && guesserIds.every((id) => solvers.has(id))) {
+    return 'Everyone got it!'
+  }
+  if (winnerName) return `${winnerName} got it!`
+  return 'Time’s up — nobody guessed it.'
 }
 
 function GuessFeed({ guesses }: { guesses: Guess[] }) {

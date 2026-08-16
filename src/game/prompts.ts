@@ -566,6 +566,10 @@ export function answersMatch(guess: string, prompt: string) {
   return hits.length >= needed && hits.some((word) => word.length >= 3)
 }
 
+export function maskSecret(value: string) {
+  return value.replace(/[A-Za-z0-9]/g, '*')
+}
+
 export function optionExists(options: CategoryOptions[], category: string, prompt: string) {
   const group = options.find((item) => item.category === category)
   return Boolean(group?.prompts.includes(prompt))

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from './protocol'
+import { maskSecret } from './prompts'
 import {
   addPlayer,
   applyMessage,
@@ -158,5 +159,80 @@ const guestNext = toRoomState(room, guest, 'TEST')
 assert(guestNext.prompt === null, 'new artist must not see the previous word')
 assert(guestNext.options !== null, 'new artist must get prompt choices')
 assert((guestNext.options?.length ?? 0) > 0, 'new artist must get prompt choices')
+
+assert(maskSecret('ice cream') === '*** *****', 'mask should keep spaces')
+assert(maskSecret('Spider-Man') === '******-***', 'mask should keep punctuation')
+assert(maskSecret('pizza') === '*****', 'mask should cover letters')
+
+const cam = 'guest-ccc'
+let multi = emptyRoom(host, 'Ada')
+const bobJoined = addPlayer(multi, guest, 'Bob')
+assert(typeof bobJoined !== 'string', 'Bob should join')
+multi = bobJoined
+const camJoined = addPlayer(multi, cam, 'Cam')
+assert(typeof camJoined !== 'string', 'Cam should join')
+multi = camJoined
+multi = unwrap(
+  applyMessage(multi, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+multi = { ...multi, options: [{ category: 'Food', prompts: ['pizza'] }] }
+multi = unwrap(applyMessage(multi, host, { type: 'pick', category: 'Food', prompt: 'pizza' }))
+multi = { ...multi, drawStartedMs: Date.now() - 15_000 }
+
+multi = unwrap(applyMessage(multi, guest, { type: 'guess', text: 'pizza' }))
+assert(multi.phase === 'drawing', 'first correct guess must not end a 3-player turn')
+assert(multi.winnerName === null, 'winner is not set until the turn ends')
+assert(multi.guessTimes[guest]?.times.length === 1, 'first solver should record a guess time')
+
+const skippedNext = unwrap(applyMessage(multi, host, { type: 'nextTurn' }))
+assert(skippedNext.phase === 'drawing', 'nextTurn must wait until reveal')
+
+const camDuringDraw = toRoomState(multi, cam, 'TEST')
+const masked = camDuringDraw.guesses.find((guess) => guess.playerId === guest)
+assert(masked?.correct, 'Cam should see that Bob got it')
+assert(masked?.text === '*****', `Cam must see a masked guess, got ${masked?.text}`)
+
+const bobDuringDraw = toRoomState(multi, guest, 'TEST')
+assert(
+  bobDuringDraw.guesses.find((guess) => guess.playerId === guest)?.text === 'pizza',
+  'Bob should still see his own correct guess',
+)
+
+const adaDuringDraw = toRoomState(multi, host, 'TEST')
+assert(
+  adaDuringDraw.guesses.find((guess) => guess.playerId === guest)?.text === '*****',
+  'the artist must not show the raw correct guess to the room feed',
+)
+
+const ignoredRepeat = unwrap(applyMessage(multi, guest, { type: 'guess', text: 'pizza' }))
+assert(ignoredRepeat.guesses.length === multi.guesses.length, 'a solver cannot guess again')
+
+const partialTimeUp = unwrap(
+  applyMessage(
+    {
+      ...multi,
+      deadlineMs: Date.now() - 1000,
+      drawStartedMs: Date.now() - 90_000,
+    },
+    host,
+    { type: 'timesUp' },
+  ),
+)
+assert(partialTimeUp.phase === 'reveal', 'time up should reveal even if only some guessers got it')
+assert(partialTimeUp.winnerName === 'Bob', `expected Bob after time up, got ${partialTimeUp.winnerName}`)
+
+multi = unwrap(applyMessage(multi, cam, { type: 'guess', text: 'pizza' }))
+assert(multi.phase === 'reveal', 'the turn ends when every guesser is correct')
+assert(multi.winnerName === 'Bob and Cam', `expected Bob and Cam, got ${multi.winnerName}`)
+assert(multi.guessTimes[cam]?.times.length === 1, 'second solver should record a guess time')
+
+const revealView = toRoomState(multi, cam, 'TEST')
+assert(
+  revealView.guesses.find((guess) => guess.playerId === guest)?.text === 'pizza',
+  'reveal should show the real guesses',
+)
 
 console.log('roomLogic tests passed')
