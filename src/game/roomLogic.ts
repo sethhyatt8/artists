@@ -280,19 +280,13 @@ function winningGuess(room: StoredRoom) {
 }
 
 function turnHasExpired(room: StoredRoom) {
-  const slack = 1500
+  if (typeof room.drawStartedMs !== 'number') return false
   const turnMs = room.settings.turnSeconds * 1000
-  if (typeof room.deadlineMs === 'number') {
-    return Date.now() + slack >= room.deadlineMs
-  }
-  if (typeof room.drawStartedMs === 'number') {
-    return Date.now() - room.drawStartedMs >= turnMs - slack
-  }
-  return false
+  return Date.now() - room.drawStartedMs >= turnMs - 2000
 }
 
 function tooEarlyToEndDrawing(room: StoredRoom) {
-  if (typeof room.drawStartedMs !== 'number') return false
+  if (typeof room.drawStartedMs !== 'number') return true
   return Date.now() - room.drawStartedMs < DRAWING_GRACE_MS
 }
 

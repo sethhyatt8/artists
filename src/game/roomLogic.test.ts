@@ -75,6 +75,22 @@ const expired = unwrap(
 )
 assert(expired.phase === 'reveal', 'timesUp after the deadline should reveal')
 
+const staleDeadline = unwrap(
+  applyMessage(
+    {
+      ...room,
+      deadlineMs: Date.now() - 1000,
+      drawStartedMs: null,
+    },
+    host,
+    { type: 'timesUp' },
+  ),
+)
+assert(
+  staleDeadline.phase === 'drawing',
+  'a missing start time must not let a stale deadline end the collage',
+)
+
 assert(
   isSpuriousDrawEnd(room, expired) === false,
   'a real expired timesUp must be allowed to reveal',

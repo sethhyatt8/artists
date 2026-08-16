@@ -63,37 +63,29 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     latestPieces.current = []
   }, [turnKey, state?.phase, isArtist])
 
+  const drawingSince = useRef<number | null>(null)
+
   useEffect(() => {
-    if (state?.phase === 'drawing') return
+    if (state?.phase === 'drawing') {
+      if (drawingSince.current == null) drawingSince.current = Date.now()
+      return
+    }
+    drawingSince.current = null
     timesUpSent.current = false
   }, [state?.phase])
 
   useEffect(() => {
-    if (state?.phase !== 'drawing') return
-    const startedAt =
-      state.drawStartedMs ??
-      (typeof state.deadlineMs === 'number'
-        ? state.deadlineMs - state.settings.turnSeconds * 1000
-        : Date.now())
-    const deadline = state.deadlineMs
+    if (state?.phase !== 'drawing' || !isArtist) return
+    const turnMs = state.settings.turnSeconds * 1000
     const id = window.setInterval(() => {
-      if (timesUpSent.current) return
-      if (Date.now() - startedAt < 10_000) return
-      const won = state.guesses.some((guess) => guess.correct)
-      const expired = typeof deadline === 'number' && Date.now() + 1500 >= deadline
-      if (!won && !expired) return
+      if (timesUpSent.current || drawingSince.current == null) return
+      const elapsed = Date.now() - drawingSince.current
+      if (elapsed < 15_000 || elapsed < turnMs - 1500) return
       timesUpSent.current = true
       send({ type: 'timesUp' })
-    }, 250)
+    }, 500)
     return () => window.clearInterval(id)
-  }, [
-    state?.phase,
-    state?.deadlineMs,
-    state?.drawStartedMs,
-    state?.guesses,
-    state?.settings.turnSeconds,
-    send,
-  ])
+  }, [state?.phase, state?.settings.turnSeconds, isArtist, send])
 
   function queueCanvas(next: CollagePiece[]) {
     setPieces(next)

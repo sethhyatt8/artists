@@ -41,6 +41,7 @@ export function useGameRoom(session: RoomSession) {
   const selfId = useRef(tabId())
   const sessionRef = useRef(session)
   const latestState = useRef<RoomState | null>(null)
+  const holdDrawingUntil = useRef(0)
   sessionRef.current = session
 
   useEffect(() => {
@@ -67,6 +68,17 @@ export function useGameRoom(session: RoomSession) {
           } satisfies StoredRoom)
       setError(null)
       const view = toRoomState(visible, id, code)
+      const now = Date.now()
+      if (view.phase === 'drawing' && latestState.current?.phase !== 'drawing') {
+        holdDrawingUntil.current = now + 15_000
+      }
+      if (
+        latestState.current?.phase === 'drawing' &&
+        view.phase !== 'drawing' &&
+        now < holdDrawingUntil.current
+      ) {
+        return
+      }
       latestState.current = view
       setState(view)
     })
@@ -143,6 +155,9 @@ export function useGameRoom(session: RoomSession) {
         const room = normalizeStoredRoom(result.snapshot)
         if (room) {
           const view = toRoomState(room, id, code)
+          if (view.phase === 'drawing' && latestState.current?.phase !== 'drawing') {
+            holdDrawingUntil.current = Date.now() + 15_000
+          }
           latestState.current = view
           setState(view)
         }

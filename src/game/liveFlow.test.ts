@@ -117,5 +117,14 @@ const afterGuess = normalizeStoredRoom(await get(`rooms/${code}`))
 assert(afterGuess?.phase === 'drawing', `early guess ended the turn: phase=${afterGuess?.phase}`)
 assert(afterGuess?.guesses.some((guess) => guess.correct), 'correct guess should be stored')
 
+const timed = unwrap(applyMessage(afterGuess, host, { type: 'timesUp' }))
+await put(`rooms/${code}`, timed)
+const afterTimesUp = normalizeStoredRoom(await get(`rooms/${code}`))
+assert(afterTimesUp?.phase === 'drawing', `immediate timesUp ended the turn: phase=${afterTimesUp?.phase}`)
+assert(
+  typeof afterTimesUp?.drawStartedMs === 'number',
+  'pick must store drawStartedMs on Firebase',
+)
+
 await put(`rooms/${code}`, null)
 console.log(`live Firebase flow passed for room ${code}`)
