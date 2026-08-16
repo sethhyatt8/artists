@@ -23,6 +23,7 @@ import type { CollagePiece } from './collage'
 
 const VOTE_POINTS = [3, 2, 1]
 const DRAWING_GRACE_MS = 10_000
+const STALE_PLAYER_MS = 25_000
 
 export type GuessClock = {
   name: string
@@ -271,8 +272,19 @@ function isController(room: StoredRoom, senderId: string) {
   return senderId === room.createdBy || senderId === room.hostId
 }
 
+function isPresentPlayer(player: Player, now: number) {
+  if (typeof player.seenAt !== 'number') return true
+  return now - player.seenAt <= STALE_PLAYER_MS
+}
+
 function guesserIds(room: StoredRoom) {
-  return Object.keys(room.players).filter((id) => id !== room.artistId)
+  const now = Date.now()
+  const ids = Object.keys(room.players).filter((id) => id !== room.artistId)
+  const present = ids.filter((id) => {
+    const player = room.players[id]
+    return player ? isPresentPlayer(player, now) : false
+  })
+  return present.length > 0 ? present : ids
 }
 
 function hasCorrectGuess(room: StoredRoom, playerId: string) {
@@ -319,6 +331,39 @@ function turnHasExpired(room: StoredRoom) {
 function tooEarlyToEndDrawing(room: StoredRoom) {
   if (typeof room.drawStartedMs !== 'number') return true
   return Date.now() - room.drawStartedMs < DRAWING_GRACE_MS
+}
+
+export function turnRemainingSeconds(input: {
+  drawStartedMs: number | null
+  deadlineMs: number | null
+  turnSeconds: number
+  now?: number
+  localStartedMs?: number | null
+}) {
+  const now = input.now ?? Date.now()
+  const turnMs = input.turnSeconds * 1000
+
+  function fromStart(started: number) {
+    return Math.max(
+      0,
+      Math.min(input.turnSeconds, Math.ceil((turnMs - (now - started)) / 1000)),
+    )
+  }
+
+  if (typeof input.drawStartedMs === 'number') {
+    const elapsed = now - input.drawStartedMs
+    if (elapsed >= -2000 && elapsed <= turnMs + 5000) {
+      return fromStart(input.drawStartedMs)
+    }
+  }
+  if (typeof input.deadlineMs === 'number') {
+    const remaining = Math.ceil((input.deadlineMs - now) / 1000)
+    if (remaining >= 0 && remaining <= input.turnSeconds + 2) {
+      return Math.min(input.turnSeconds, remaining)
+    }
+  }
+  if (typeof input.localStartedMs === 'number') return fromStart(input.localStartedMs)
+  return input.turnSeconds
 }
 
 export function isSpuriousDrawEnd(prev: StoredRoom, next: StoredRoom) {
@@ -416,7 +461,7 @@ export function staleGuestIds(room: StoredRoom, selfId: string) {
   return Object.entries(room.players)
     .filter(([id, player]) => {
       if (id === selfId || id === room.createdBy || id === room.hostId) return false
-      return typeof player.seenAt === 'number' && now - player.seenAt > 25_000
+      return typeof player.seenAt === 'number' && !isPresentPlayer(player, now)
     })
     .map(([id]) => id)
 }
@@ -491,13 +536,13 @@ export function applyMessage(
       ...next,
       guessTimes: recordGuessTime(next, senderId, player.name),
     }
-    if (tooEarlyToEndDrawing(next) || !allGuessersCorrect(next)) return next
+    if (!allGuessersCorrect(next)) return next
     return endTurn(next)
   }
 
   if (message.type === 'timesUp') {
     if (room.phase !== 'drawing') return room
-    if (allGuessersCorrect(room) && !tooEarlyToEndDrawing(room)) return endTurn(room)
+    if (allGuessersCorrect(room)) return endTurn(room)
     if (tooEarlyToEndDrawing(room) || !turnHasExpired(room)) return room
     return endTurn(room)
   }

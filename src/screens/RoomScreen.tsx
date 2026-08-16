@@ -16,6 +16,7 @@ import {
   type SavedCollage,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
+import { turnRemainingSeconds } from '../game/roomLogic'
 
 type RoomScreenProps = {
   session: RoomSession
@@ -34,7 +35,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const connectionId = state?.selfId ?? ''
   const isHost = session.intent === 'create'
   const isArtist = Boolean(state && state.artistId === connectionId)
-  const seconds = useCountdown(state?.deadlineMs ?? null)
+  const seconds = useTurnCountdown(state)
   const winnerName =
     state?.winnerName ?? state?.guesses.find((guess) => guess.correct)?.name ?? null
   const hostName = state?.players.find(
@@ -64,6 +65,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }, [turnKey, state?.phase, isArtist])
 
   const drawingSince = useRef<number | null>(null)
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     if (state?.phase === 'drawing') {
@@ -76,16 +79,35 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
 
   useEffect(() => {
     if (state?.phase !== 'drawing' || !isArtist) return
-    const turnMs = state.settings.turnSeconds * 1000
     const id = window.setInterval(() => {
+      const current = stateRef.current
+      if (!current || current.phase !== 'drawing') return
       if (timesUpSent.current || drawingSince.current == null) return
+      const guessers = current.players.filter((player) => player.id !== current.artistId)
+      const allGotIt =
+        guessers.length > 0 &&
+        guessers.every((player) =>
+          current.guesses.some((guess) => guess.correct && guess.playerId === player.id),
+        )
+      if (allGotIt) {
+        timesUpSent.current = true
+        send({ type: 'timesUp' })
+        return
+      }
       const elapsed = Date.now() - drawingSince.current
-      if (elapsed < 15_000 || elapsed < turnMs - 1500) return
+      if (elapsed < 15_000) return
+      const remaining = turnRemainingSeconds({
+        drawStartedMs: current.drawStartedMs,
+        deadlineMs: current.deadlineMs,
+        turnSeconds: current.settings.turnSeconds,
+        localStartedMs: drawingSince.current,
+      })
+      if (remaining > 1) return
       timesUpSent.current = true
       send({ type: 'timesUp' })
     }, 500)
     return () => window.clearInterval(id)
-  }, [state?.phase, state?.settings.turnSeconds, isArtist, send])
+  }, [state?.phase, isArtist, send])
 
   function queueCanvas(next: CollagePiece[]) {
     setPieces(next)
@@ -817,16 +839,24 @@ function formatTime(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-function useCountdown(deadlineMs: number | null) {
+function useTurnCountdown(state: RoomState | null) {
+  const localStarted = useRef<number | null>(null)
   const [, setTick] = useState(0)
 
   useEffect(() => {
-    if (deadlineMs === null) return
-    setTick((tick) => tick + 1)
-    const id = window.setInterval(() => setTick((tick) => tick + 1), 250)
-    return () => window.clearInterval(id)
-  }, [deadlineMs])
+    if (state?.phase === 'drawing') {
+      if (localStarted.current == null) localStarted.current = Date.now()
+      const id = window.setInterval(() => setTick((tick) => tick + 1), 250)
+      return () => window.clearInterval(id)
+    }
+    localStarted.current = null
+  }, [state?.phase])
 
-  if (deadlineMs === null) return null
-  return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000))
+  if (!state || state.phase !== 'drawing') return null
+  return turnRemainingSeconds({
+    drawStartedMs: state.drawStartedMs,
+    deadlineMs: state.deadlineMs,
+    turnSeconds: state.settings.turnSeconds,
+    localStartedMs: localStarted.current,
+  })
 }

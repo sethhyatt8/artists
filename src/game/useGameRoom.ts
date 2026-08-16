@@ -4,6 +4,7 @@ import {
   addPlayer,
   applyMessage,
   emptyRoom,
+  isSpuriousDrawEnd,
   normalizeStoredRoom,
   playerCount,
   playerRecord,
@@ -41,7 +42,7 @@ export function useGameRoom(session: RoomSession) {
   const selfId = useRef(tabId())
   const sessionRef = useRef(session)
   const latestState = useRef<RoomState | null>(null)
-  const holdDrawingUntil = useRef(0)
+  const latestRoom = useRef<StoredRoom | null>(null)
   sessionRef.current = session
 
   useEffect(() => {
@@ -67,20 +68,12 @@ export function useGameRoom(session: RoomSession) {
             players: { ...room.players, [id]: playerRecord(id, name) },
           } satisfies StoredRoom)
       setError(null)
-      const view = toRoomState(visible, id, code)
-      const now = Date.now()
-      if (view.phase === 'drawing' && latestState.current?.phase !== 'drawing') {
-        holdDrawingUntil.current = now + 15_000
-      }
-      if (
-        latestState.current?.phase === 'drawing' &&
-        view.phase !== 'drawing' &&
-        now < holdDrawingUntil.current
-      ) {
+      if (latestRoom.current && isSpuriousDrawEnd(latestRoom.current, visible)) {
         return
       }
-      latestState.current = view
-      setState(view)
+      latestRoom.current = visible
+      latestState.current = toRoomState(visible, id, code)
+      setState(latestState.current)
     })
 
     void rtdbTransaction(path, (current) => {
@@ -154,12 +147,9 @@ export function useGameRoom(session: RoomSession) {
       if (result.committed) {
         const room = normalizeStoredRoom(result.snapshot)
         if (room) {
-          const view = toRoomState(room, id, code)
-          if (view.phase === 'drawing' && latestState.current?.phase !== 'drawing') {
-            holdDrawingUntil.current = Date.now() + 15_000
-          }
-          latestState.current = view
-          setState(view)
+          latestRoom.current = room
+          latestState.current = toRoomState(room, id, code)
+          setState(latestState.current)
         }
         return
       }

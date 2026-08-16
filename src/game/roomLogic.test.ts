@@ -7,6 +7,7 @@ import {
   isSpuriousDrawEnd,
   roomPatch,
   toRoomState,
+  turnRemainingSeconds,
   type StoredRoom,
 } from './roomLogic'
 
@@ -102,21 +103,14 @@ assert(
 )
 
 const earlyGuess = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
-assert(earlyGuess.phase === 'drawing', 'a guess in the first seconds must not end the collage')
+assert(earlyGuess.phase === 'reveal', 'the last remaining guesser should end the turn')
+assert(earlyGuess.winnerName === 'Bob', `expected Bob to win, got ${earlyGuess.winnerName}`)
 assert(
   earlyGuess.guesses.some((guess) => guess.correct),
   'the correct guess should still appear in the feed',
 )
 
-room = unwrap(
-  applyMessage(
-    { ...room, drawStartedMs: Date.now() - 15_000 },
-    guest,
-    { type: 'guess', text: 'pizza' },
-  ),
-)
-assert(room.phase === 'reveal', `expected reveal, got ${room.phase}`)
-assert(room.winnerName === 'Bob', `expected Bob to win, got ${room.winnerName}`)
+room = earlyGuess
 
 const guestReveal = toRoomState(room, guest, 'TEST')
 assert(guestReveal.prompt === 'pizza', 'both may see the prompt on reveal')
@@ -233,6 +227,84 @@ const revealView = toRoomState(multi, cam, 'TEST')
 assert(
   revealView.guesses.find((guess) => guess.playerId === guest)?.text === 'pizza',
   'reveal should show the real guesses',
+)
+
+let lastLeft = emptyRoom(host, 'Ada')
+const lastBob = addPlayer(lastLeft, guest, 'Bob')
+assert(typeof lastBob !== 'string', 'Bob should join last-left room')
+lastLeft = lastBob
+const lastCam = addPlayer(lastLeft, cam, 'Cam')
+assert(typeof lastCam !== 'string', 'Cam should join last-left room')
+lastLeft = lastCam
+lastLeft = unwrap(
+  applyMessage(lastLeft, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+lastLeft = { ...lastLeft, options: [{ category: 'Food', prompts: ['pizza'] }] }
+lastLeft = unwrap(applyMessage(lastLeft, host, { type: 'pick', category: 'Food', prompt: 'pizza' }))
+lastLeft = unwrap(applyMessage(lastLeft, guest, { type: 'guess', text: 'pizza' }))
+assert(lastLeft.phase === 'drawing', 'first of two guessers should leave the turn running')
+lastLeft = unwrap(applyMessage(lastLeft, cam, { type: 'guess', text: 'pizza' }))
+assert(lastLeft.phase === 'reveal', 'the last remaining guesser must end the turn immediately')
+assert(lastLeft.winnerName === 'Bob and Cam', `expected Bob and Cam, got ${lastLeft.winnerName}`)
+
+let ghosted = emptyRoom(host, 'Ada')
+const ghostBob = addPlayer(ghosted, guest, 'Bob')
+assert(typeof ghostBob !== 'string', 'Bob should join ghost room')
+ghosted = ghostBob
+const ghostCam = addPlayer(ghosted, cam, 'Cam')
+assert(typeof ghostCam !== 'string', 'Cam should join ghost room')
+ghosted = ghostCam
+ghosted = unwrap(
+  applyMessage(ghosted, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+ghosted = { ...ghosted, options: [{ category: 'Food', prompts: ['pizza'] }] }
+ghosted = unwrap(applyMessage(ghosted, host, { type: 'pick', category: 'Food', prompt: 'pizza' }))
+ghosted = {
+  ...ghosted,
+  players: {
+    ...ghosted.players,
+    [cam]: { ...ghosted.players[cam], seenAt: Date.now() - 60_000 },
+  },
+}
+ghosted = unwrap(applyMessage(ghosted, guest, { type: 'guess', text: 'pizza' }))
+assert(ghosted.phase === 'reveal', 'a dropped extra player must not block the last remaining guesser')
+assert(ghosted.winnerName === 'Bob', `expected Bob with a stale extra player, got ${ghosted.winnerName}`)
+
+const now = 2_000_000
+assert(
+  turnRemainingSeconds({
+    drawStartedMs: now,
+    deadlineMs: now + 90_000,
+    turnSeconds: 90,
+    now: now + 30_000,
+  }) === 60,
+  'synced clocks should show time left in the turn',
+)
+assert(
+  turnRemainingSeconds({
+    drawStartedMs: now + 8 * 60_000,
+    deadlineMs: now + 8 * 60_000 + 90_000,
+    turnSeconds: 90,
+    now,
+    localStartedMs: now,
+  }) === 90,
+  'a skewed clock must not show a 9-minute timer',
+)
+assert(
+  turnRemainingSeconds({
+    drawStartedMs: now + 8 * 60_000,
+    deadlineMs: now + 8 * 60_000 + 90_000,
+    turnSeconds: 90,
+    now,
+    localStartedMs: now - 30_000,
+  }) === 60,
+  'skewed clocks should count down from when this device started the turn',
 )
 
 console.log('roomLogic tests passed')
