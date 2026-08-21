@@ -56,11 +56,7 @@ export function HomeScreen({
     <main className="screen home">
       <p className="eyebrow">Party rooms</p>
       <h1>Artists</h1>
-      <p className="lede">
-        Collage-and-guess, one device each. The host picks a shape set, turn
-        timer, and number of rounds. Then one artist collages while everyone
-        else types guesses.
-      </p>
+      <p className="lede">We Shape Artists</p>
 
       <label className="field">
         <span>Your name</span>
