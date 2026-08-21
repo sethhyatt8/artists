@@ -44,8 +44,15 @@ body {
   max-width: none;
   min-height: 100svh;
   height: 100svh;
-  padding: 12px 20px 16px;
+  padding: 8px 12px 12px;
   display: flex;
+  overflow: hidden;
+}
+
+@media (min-width: 960px) {
+  #root.wide {
+    padding: 12px 20px 16px;
+  }
 }
 
 h1,

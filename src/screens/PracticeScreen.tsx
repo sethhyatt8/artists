@@ -22,14 +22,14 @@ export function PracticeScreen({ onLeave }: PracticeScreenProps) {
       </header>
 
       <p className="hint">
-        Build a picture from ordinary junk. Drag on empty canvas to lasso a
-        group, then move them together. Shift-click adds to the selection.
+        Build a picture from ordinary junk. On a phone, pinch to resize and
+        twist two fingers to rotate. Drag empty canvas to lasso a group.
       </p>
 
       <CollageStudio
         pieces={pieces}
         onPiecesChange={setPieces}
-        hint="Drag empty canvas to lasso a group. Shift-click adds to the selection. Right-click a piece for duplicate and layers. Ctrl+Z / Cmd+Z undoes."
+        hint="Drag empty canvas to lasso a group. On a phone, pinch to resize and twist two fingers to rotate. Ctrl+Z / Cmd+Z undoes."
       />
     </main>
   )

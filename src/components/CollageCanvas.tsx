@@ -58,6 +58,18 @@ type Drag =
       centerY: number
       lastAngle: number
     }
+  | {
+      mode: 'pinch'
+      ids: string[]
+      lastSpan: number
+      lastAngle: number
+    }
+
+type ActivePointer = {
+  id: number
+  clientX: number
+  clientY: number
+}
 
 type PendingPress = {
   pointerId: number
@@ -108,6 +120,7 @@ export function CollageCanvas({
   const [lasso, setLasso] = useState<ReturnType<typeof normalizeRect> | null>(null)
   const wheelBurstRef = useRef(false)
   const wheelTimerRef = useRef<number | null>(null)
+  const pointersRef = useRef<Map<number, ActivePointer>>(new Map())
 
   useEffect(() => {
     piecesRef.current = pieces
@@ -240,6 +253,48 @@ export function CollageCanvas({
     if (changed) commitPieces(next)
   }
 
+  function rememberPointer(event: PointerEvent<SVGElement>) {
+    pointersRef.current.set(event.pointerId, {
+      id: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    })
+  }
+
+  function forgetPointer(pointerId: number) {
+    pointersRef.current.delete(pointerId)
+  }
+
+  function pinchPair() {
+    const points = [...pointersRef.current.values()]
+    if (points.length < 2) return null
+    const [a, b] = points
+    if (!a || !b) return null
+    return { a, b }
+  }
+
+  function beginPinch() {
+    const pair = pinchPair()
+    if (!pair) return
+    const ax = toCanvas(pair.a.clientX, pair.a.clientY)
+    const bx = toCanvas(pair.b.clientX, pair.b.clientY)
+    const midX = (ax.x + bx.x) / 2
+    const midY = (ax.y + bx.y) / 2
+    const ids = idsForEdit(midX, midY)
+    if (ids.length === 0) return
+    clearPending()
+    setMenu(null)
+    setLasso(null)
+    lassoRef.current = null
+    if (dragRef.current?.mode !== 'pinch') onGestureStart?.()
+    dragRef.current = {
+      mode: 'pinch',
+      ids,
+      lastSpan: Math.max(8, Math.hypot(bx.x - ax.x, bx.y - ax.y)),
+      lastAngle: Math.atan2(bx.y - ax.y, bx.x - ax.x),
+    }
+  }
+
   function startSpin(ids: string[], x: number, y: number) {
     const targets = piecesRef.current.filter((piece) => ids.includes(piece.id))
     const box = groupBounds(targets)
@@ -332,6 +387,11 @@ export function CollageCanvas({
     if (readOnly) return
     if (event.target !== svgRef.current) return
     if (event.button === 2) return
+    rememberPointer(event)
+    if (event.pointerType !== 'mouse' && pinchPair()) {
+      beginPinch()
+      return
+    }
 
     const { x, y } = toCanvas(event.clientX, event.clientY)
     if (event.button === 1) {
@@ -361,6 +421,11 @@ export function CollageCanvas({
   function onGroupPointerDown(event: PointerEvent<SVGRectElement>) {
     event.stopPropagation()
     if (event.button === 2) return
+    rememberPointer(event)
+    if (event.pointerType !== 'mouse' && pinchPair()) {
+      beginPinch()
+      return
+    }
     const { x, y } = toCanvas(event.clientX, event.clientY)
     if (event.button === 1) {
       beginMiddleSpin(event, x, y, selectedRef.current[0] ?? null)
@@ -374,6 +439,11 @@ export function CollageCanvas({
     event.stopPropagation()
     if (event.button === 2) {
       if (!selectedRef.current.includes(id)) onSelect([id])
+      return
+    }
+    rememberPointer(event)
+    if (event.pointerType !== 'mouse' && pinchPair()) {
+      beginPinch()
       return
     }
     const { x, y } = toCanvas(event.clientX, event.clientY)
@@ -468,6 +538,39 @@ export function CollageCanvas({
   }
 
   function onPointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (pointersRef.current.has(event.pointerId)) {
+      rememberPointer(event)
+    }
+    if (dragRef.current?.mode === 'pinch') {
+      const pair = pinchPair()
+      if (!pair) return
+      const ax = toCanvas(pair.a.clientX, pair.a.clientY)
+      const bx = toCanvas(pair.b.clientX, pair.b.clientY)
+      const span = Math.max(8, Math.hypot(bx.x - ax.x, bx.y - ax.y))
+      const angle = Math.atan2(bx.y - ax.y, bx.x - ax.x)
+      const factor = span / dragRef.current.lastSpan
+      let delta = ((angle - dragRef.current.lastAngle) * 180) / Math.PI
+      if (delta > 180) delta -= 360
+      if (delta < -180) delta += 360
+      const spinning = new Set(dragRef.current.ids)
+      commitPieces(
+        piecesRef.current.map((piece) => {
+          if (!spinning.has(piece.id)) return piece
+          const width = clampPieceSize(piece.width * factor)
+          const ratio = piece.height / piece.width
+          return {
+            ...piece,
+            width,
+            height: clampPieceSize(width * ratio),
+            rotation: piece.rotation + delta,
+          }
+        }),
+      )
+      dragRef.current.lastSpan = span
+      dragRef.current.lastAngle = angle
+      return
+    }
+
     const pending = pendingRef.current
     if (pending && pending.pointerId === event.pointerId) {
       const dist = Math.hypot(
@@ -545,7 +648,19 @@ export function CollageCanvas({
     })
   }
 
-  function onPointerUp() {
+  function onPointerUp(event: PointerEvent<SVGSVGElement>) {
+    forgetPointer(event.pointerId)
+    if (dragRef.current?.mode === 'pinch') {
+      if (pinchPair()) {
+        beginPinch()
+        return
+      }
+      dragRef.current = null
+      clearPending()
+      onGestureEnd?.()
+      return
+    }
+
     const drag = dragRef.current
     clearPending()
     dragRef.current = null
