@@ -46,6 +46,7 @@ body {
   height: 100svh;
   padding: 8px 12px 12px;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
