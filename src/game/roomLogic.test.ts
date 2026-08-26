@@ -1,11 +1,13 @@
-import { DEFAULT_SETTINGS } from './protocol'
+import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
 import { answersMatch, maskSecret } from './prompts'
 import {
   addPlayer,
   applyMessage,
   emptyRoom,
   isSpuriousDrawEnd,
+  normalizeStoredRoom,
   roomPatch,
+  toFirebaseRoom,
   toRoomState,
   turnRemainingSeconds,
   type StoredRoom,
@@ -316,5 +318,83 @@ assert(
   }) === 60,
   'skewed clocks should count down from when this device started the turn',
 )
+
+assert(
+  sanitizeGameSettings({ shapeSets: ['letters', 'weird', 'letters'] }).shapeSets.join(',') ===
+    'letters,weird',
+  'hosts should be able to combine shape sets',
+)
+assert(
+  sanitizeGameSettings({ shapeSet: 'regular' }).shapeSets.join(',') === 'regular',
+  'old single shape-set rooms should still load',
+)
+
+const orderedGuesses = normalizeStoredRoom(
+  toFirebaseRoom({
+    ...emptyRoom(host, 'Ada'),
+    guesses: [
+      { id: 'g-aaa-2', playerId: 'a', name: 'Ann', text: 'later', correct: false, seq: 2 },
+      { id: 'g-zzz-1', playerId: 'z', name: 'Zed', text: 'earlier', correct: false, seq: 1 },
+    ],
+  }),
+)
+assert(orderedGuesses, 'guess room should normalize')
+assert(
+  orderedGuesses.guesses.map((guess) => guess.text).join(',') === 'earlier,later',
+  `guesses must stay in chat order, got ${orderedGuesses.guesses.map((guess) => guess.text).join(',')}`,
+)
+
+const dan = 'guest-ddd'
+const ghost = 'guest-eee'
+let voteRoom = emptyRoom(host, 'Ada')
+for (const [id, name] of [
+  [guest, 'Bob'],
+  [cam, 'Cam'],
+  [dan, 'Dan'],
+  [ghost, 'Eve'],
+] as const) {
+  const joinedVote = addPlayer(voteRoom, id, name)
+  assert(typeof joinedVote !== 'string', `${name} should join the vote room`)
+  voteRoom = joinedVote
+}
+voteRoom = {
+  ...voteRoom,
+  phase: 'voting',
+  collages: [
+    {
+      id: 'c-1',
+      round: 1,
+      artistId: host,
+      artistName: 'Ada',
+      prompt: 'pizza',
+      pieces: [],
+    },
+    {
+      id: 'c-2',
+      round: 2,
+      artistId: guest,
+      artistName: 'Bob',
+      prompt: 'moon',
+      pieces: [],
+    },
+  ],
+  votes: {},
+}
+const ghostPlayer = voteRoom.players[ghost]
+assert(ghostPlayer, 'ghost player should exist')
+voteRoom = {
+  ...voteRoom,
+  players: {
+    ...voteRoom.players,
+    [ghost]: { ...ghostPlayer, seenAt: Date.now() - 60_000 },
+  },
+}
+const voteView = toRoomState(voteRoom, host, 'TEST')
+assert(voteView.voterCount === 4, `should wait for 4 present voters, got ${voteView.voterCount}`)
+const ballot = ['c-1', 'c-2']
+for (const id of [host, guest, cam, dan]) {
+  voteRoom = unwrap(applyMessage(voteRoom, id, { type: 'vote', ranks: ballot }))
+}
+assert(voteRoom.phase === 'finale', `four present votes should finish, got ${voteRoom.phase}`)
 
 console.log('roomLogic tests passed')

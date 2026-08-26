@@ -20,7 +20,7 @@ type CollageStudioProps = {
   extraRight?: ReactNode
   hint?: string
   locked?: boolean
-  shapeSet?: ShapeSet | 'all'
+  shapeSets?: ShapeSet[] | 'all'
 }
 
 function clonePieces(pieces: CollagePiece[]) {
@@ -106,7 +106,7 @@ export function CollageStudio({
   extraRight,
   hint,
   locked = false,
-  shapeSet = 'all',
+  shapeSets = 'all',
 }: CollageStudioProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [color, setColor] = useState<string>(PALETTE[0])
@@ -114,9 +114,9 @@ export function CollageStudio({
     pieces,
     onPiecesChange,
   )
-  const showRegular = shapeSet === 'regular' || shapeSet === 'all'
-  const showWeird = shapeSet === 'weird' || shapeSet === 'all'
-  const showLetters = shapeSet === 'letters' || shapeSet === 'all'
+  const showRegular = shapeSets === 'all' || shapeSets.includes('regular')
+  const showWeird = shapeSets === 'all' || shapeSets.includes('weird')
+  const showLetters = shapeSets === 'all' || shapeSets.includes('letters')
   const selected = selectedIds.length > 0 && !locked
 
   useEffect(() => {

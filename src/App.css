@@ -304,13 +304,43 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 120px;
-  max-height: 280px;
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: min(42vh, 420px);
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
+}
+
+.chat-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-raise);
+}
+
+.chat-name {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-text {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.chat-line.correct {
+  background: var(--ember-dim);
+}
+
+.chat-line.correct .chat-text {
+  color: var(--ready);
 }
 
 .guess {

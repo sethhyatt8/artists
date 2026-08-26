@@ -173,7 +173,7 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
         ? null
         : asArray<CategoryOptions>(value.options),
     pieces: asArray<CollagePiece>(value.pieces),
-    guesses: asArray<Guess>(value.guesses),
+    guesses: sortGuesses(asArray<Guess>(value.guesses)),
     deadlineMs: typeof value.deadlineMs === 'number' ? value.deadlineMs : null,
     winnerName: typeof value.winnerName === 'string' ? value.winnerName : null,
     settings: sanitizeGameSettings(value.settings),
@@ -237,8 +237,8 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     round: room.round,
     collages: room.collages,
     myVote,
-    votedCount: Object.keys(room.votes).length,
-    voterCount: playerCount(room),
+    votedCount: activePlayerIds(room).filter((id) => (room.votes[id]?.length ?? 0) > 0).length,
+    voterCount: activePlayerIds(room).length,
     favorites: rankFavorites(room.collages, room.votes),
     guessChampion: pickGuessChampion(room.guessTimes),
   }
@@ -273,18 +273,24 @@ function isController(room: StoredRoom, senderId: string) {
 }
 
 function isPresentPlayer(player: Player, now: number) {
-  if (typeof player.seenAt !== 'number') return true
+  if (typeof player.seenAt !== 'number') return false
   return now - player.seenAt <= STALE_PLAYER_MS
 }
 
-function guesserIds(room: StoredRoom) {
+export function activePlayerIds(room: StoredRoom) {
   const now = Date.now()
-  const ids = Object.keys(room.players).filter((id) => id !== room.artistId)
+  const ids = Object.keys(room.players)
   const present = ids.filter((id) => {
     const player = room.players[id]
     return player ? isPresentPlayer(player, now) : false
   })
   return present.length > 0 ? present : ids
+}
+
+function guesserIds(room: StoredRoom) {
+  const ids = activePlayerIds(room).filter((id) => id !== room.artistId)
+  if (ids.length > 0) return ids
+  return Object.keys(room.players).filter((id) => id !== room.artistId)
 }
 
 function hasCorrectGuess(room: StoredRoom, playerId: string) {
@@ -307,6 +313,11 @@ function allGuessersCorrect(room: StoredRoom) {
   return guessers.length > 0 && guessers.every((id) => hasCorrectGuess(room, id))
 }
 
+export function finishTurnIfGuessersDone(room: StoredRoom) {
+  if (room.phase !== 'drawing' || !allGuessersCorrect(room)) return room
+  return endTurn(room)
+}
+
 function formatNameList(names: string[]) {
   if (names.length === 0) return null
   if (names.length === 1) return names[0]
@@ -315,11 +326,26 @@ function formatNameList(names: string[]) {
 }
 
 function visibleGuesses(room: StoredRoom, selfId: string) {
-  if (room.phase !== 'drawing') return room.guesses
-  return room.guesses.map((guess) => {
+  const guesses = sortGuesses(room.guesses)
+  if (room.phase !== 'drawing') return guesses
+  return guesses.map((guess) => {
     if (!guess.correct || guess.playerId === selfId) return guess
     return { ...guess, text: maskSecret(guess.text) }
   })
+}
+
+export function sortGuesses(guesses: Guess[]) {
+  return [...guesses].sort((a, b) => {
+    const delta = guessSeq(a) - guessSeq(b)
+    if (delta !== 0) return delta
+    return a.id.localeCompare(b.id)
+  })
+}
+
+function guessSeq(guess: Guess) {
+  if (typeof guess.seq === 'number') return guess.seq
+  const match = /-(\d+)$/.exec(guess.id)
+  return match ? Number(match[1]) : 0
 }
 
 function turnHasExpired(room: StoredRoom) {
@@ -461,7 +487,7 @@ export function staleGuestIds(room: StoredRoom, selfId: string) {
   return Object.entries(room.players)
     .filter(([id, player]) => {
       if (id === selfId || id === room.createdBy || id === room.hostId) return false
-      return typeof player.seenAt === 'number' && !isPresentPlayer(player, now)
+      return !isPresentPlayer(player, now)
     })
     .map(([id]) => id)
 }
@@ -528,6 +554,7 @@ export function applyMessage(
       name: player.name,
       text,
       correct,
+      seq: guessSerial,
     }
     const guesses = [...room.guesses, guess].slice(-40)
     let next: StoredRoom = { ...room, guesses, guessSerial }
@@ -677,7 +704,7 @@ function sanitizeRanks(ranks: string[], collages: SavedCollage[]) {
 }
 
 function allPlayersVoted(room: StoredRoom) {
-  const ids = Object.keys(room.players)
+  const ids = activePlayerIds(room)
   if (ids.length === 0) return false
   return ids.every((id) => Array.isArray(room.votes[id]) && (room.votes[id]?.length ?? 0) > 0)
 }

@@ -57,9 +57,9 @@ export function HomeScreen({
       <p className="eyebrow">Party rooms</p>
       <h1>Artists</h1>
       <p className="lede">
-        Collage-and-guess, one device each. The host picks a shape set, turn
-        timer, and number of rounds. Then one artist collages while everyone
-        else types guesses.
+        Collage-and-guess, one device each. The host can turn on more than one
+        shape set, pick a timer, and set the number of rounds. Then one artist
+        collages while everyone else types guesses.
       </p>
 
       <label className="field">

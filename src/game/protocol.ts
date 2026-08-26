@@ -18,14 +18,16 @@ export const SHAPE_SET = {
 
 export type ShapeSet = (typeof SHAPE_SET)[keyof typeof SHAPE_SET]
 
+export const SHAPE_SET_ORDER: ShapeSet[] = ['regular', 'weird', 'letters']
+
 export type GameSettings = {
-  shapeSet: ShapeSet
+  shapeSets: ShapeSet[]
   turnSeconds: number
   rounds: number
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
-  shapeSet: 'weird',
+  shapeSets: ['weird'],
   turnSeconds: 90,
   rounds: 4,
 }
@@ -54,6 +56,7 @@ export type Guess = {
   name: string
   text: string
   correct: boolean
+  seq?: number
 }
 
 export type SavedCollage = {
@@ -234,7 +237,8 @@ function isGuess(value: unknown): value is Guess {
     typeof value.playerId === 'string' &&
     typeof value.name === 'string' &&
     typeof value.text === 'string' &&
-    typeof value.correct === 'boolean'
+    typeof value.correct === 'boolean' &&
+    (value.seq === undefined || typeof value.seq === 'number')
   )
 }
 
@@ -278,6 +282,30 @@ function isRoomState(value: unknown): value is RoomState {
   return true
 }
 
+export function isShapeSet(value: unknown): value is ShapeSet {
+  return value === 'regular' || value === 'weird' || value === 'letters'
+}
+
+export function sanitizeShapeSets(raw: unknown): ShapeSet[] {
+  const found: ShapeSet[] = []
+  const list = Array.isArray(raw) ? raw : raw !== undefined && raw !== null ? [raw] : []
+  for (const item of list) {
+    if (isShapeSet(item) && !found.includes(item)) found.push(item)
+  }
+  return found
+}
+
+export function shapeSetsLabel(sets: ShapeSet[]) {
+  const labels: Record<ShapeSet, string> = {
+    regular: 'Regular shapes',
+    weird: 'Weird junk',
+    letters: 'Letters A–Z',
+  }
+  const ordered = SHAPE_SET_ORDER.filter((item) => sets.includes(item))
+  if (ordered.length === 0) return labels.weird
+  return ordered.map((item) => labels[item]).join(' + ')
+}
+
 export function sanitizeGameSettings(raw: unknown): GameSettings {
   const record = isRecord(raw) ? raw : {}
   const turnSeconds = (TURN_SECONDS_OPTIONS as readonly number[]).includes(
@@ -289,11 +317,10 @@ export function sanitizeGameSettings(raw: unknown): GameSettings {
     typeof record.rounds === 'number' && Number.isFinite(record.rounds)
       ? Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, Math.round(record.rounds)))
       : DEFAULT_SETTINGS.rounds
+  const fromSets = sanitizeShapeSets(record.shapeSets)
+  const fromLegacy = sanitizeShapeSets(record.shapeSet)
   return {
-    shapeSet:
-      record.shapeSet === 'regular' || record.shapeSet === 'letters'
-        ? record.shapeSet
-        : 'weird',
+    shapeSets: fromSets.length > 0 ? fromSets : fromLegacy.length > 0 ? fromLegacy : [...DEFAULT_SETTINGS.shapeSets],
     turnSeconds,
     rounds,
   }
@@ -301,9 +328,8 @@ export function sanitizeGameSettings(raw: unknown): GameSettings {
 
 function isGameSettings(value: unknown): value is GameSettings {
   if (!isRecord(value)) return false
-  if (value.shapeSet !== 'regular' && value.shapeSet !== 'weird' && value.shapeSet !== 'letters') {
-    return false
-  }
+  if (!Array.isArray(value.shapeSets) || value.shapeSets.length === 0) return false
+  if (!value.shapeSets.every(isShapeSet)) return false
   if (typeof value.turnSeconds !== 'number') return false
   if (typeof value.rounds !== 'number') return false
   return true
