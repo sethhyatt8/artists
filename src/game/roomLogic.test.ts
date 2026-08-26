@@ -284,9 +284,24 @@ ghosted = {
     [cam]: { ...ghosted.players[cam], seenAt: Date.now() - 60_000 },
   },
 }
-ghosted = unwrap(applyMessage(ghosted, guest, { type: 'guess', text: 'pizza' }))
-assert(ghosted.phase === 'reveal', 'a dropped extra player must not block the last remaining guesser')
-assert(ghosted.winnerName === 'Bob', `expected Bob with a stale extra player, got ${ghosted.winnerName}`)
+const quietGuesser = unwrap(applyMessage(ghosted, guest, { type: 'guess', text: 'pizza' }))
+assert(
+  quietGuesser.phase === 'drawing',
+  'a quiet guesser still listed in the room must get the rest of the turn',
+)
+
+const camPlayer = ghosted.players[cam]
+assert(camPlayer, 'Cam should still be in the ghost room')
+const { [cam]: _dropped, ...remainingPlayers } = ghosted.players
+const afterLeave = unwrap(
+  applyMessage(
+    { ...ghosted, players: remainingPlayers },
+    guest,
+    { type: 'guess', text: 'pizza' },
+  ),
+)
+assert(afterLeave.phase === 'reveal', 'a player who actually left must not block the last remaining guesser')
+assert(afterLeave.winnerName === 'Bob', `expected Bob after Cam left, got ${afterLeave.winnerName}`)
 
 const now = 2_000_000
 assert(
@@ -386,7 +401,7 @@ voteRoom = {
   ...voteRoom,
   players: {
     ...voteRoom.players,
-    [ghost]: { ...ghostPlayer, seenAt: Date.now() - 60_000 },
+    [ghost]: { ...ghostPlayer, seenAt: Date.now() - 90_000 },
   },
 }
 const voteView = toRoomState(voteRoom, host, 'TEST')

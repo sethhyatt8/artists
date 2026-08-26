@@ -115,6 +115,7 @@ export function useGameRoom(session: RoomSession) {
       void rtdbSet(`${path}/players/${id}/seenAt`, Date.now())
       const room = latestRoom.current
       if (!room) return
+      if (room.phase !== 'lobby' && room.phase !== 'voting' && room.phase !== 'finale') return
       for (const staleId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${staleId}`, null)
       }

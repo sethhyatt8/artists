@@ -23,7 +23,7 @@ import type { CollagePiece } from './collage'
 
 const VOTE_POINTS = [3, 2, 1]
 const DRAWING_GRACE_MS = 10_000
-const STALE_PLAYER_MS = 25_000
+const STALE_PLAYER_MS = 60_000
 
 export type GuessClock = {
   name: string
@@ -273,7 +273,7 @@ function isController(room: StoredRoom, senderId: string) {
 }
 
 function isPresentPlayer(player: Player, now: number) {
-  if (typeof player.seenAt !== 'number') return false
+  if (typeof player.seenAt !== 'number') return true
   return now - player.seenAt <= STALE_PLAYER_MS
 }
 
@@ -288,8 +288,6 @@ export function activePlayerIds(room: StoredRoom) {
 }
 
 function guesserIds(room: StoredRoom) {
-  const ids = activePlayerIds(room).filter((id) => id !== room.artistId)
-  if (ids.length > 0) return ids
   return Object.keys(room.players).filter((id) => id !== room.artistId)
 }
 
