@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from './protocol'
+import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
 import { answersMatch, maskSecret } from './prompts'
 import {
   addPlayer,
@@ -301,9 +301,24 @@ ghosted = {
     [cam]: { ...ghosted.players[cam], seenAt: Date.now() - 60_000 },
   },
 }
-ghosted = unwrap(applyMessage(ghosted, guest, { type: 'guess', text: 'pizza' }))
-assert(ghosted.phase === 'reveal', 'a dropped extra player must not block the last remaining guesser')
-assert(ghosted.winnerName === 'Bob', `expected Bob with a stale extra player, got ${ghosted.winnerName}`)
+const quietGuesser = unwrap(applyMessage(ghosted, guest, { type: 'guess', text: 'pizza' }))
+assert(
+  quietGuesser.phase === 'drawing',
+  'a quiet guesser still listed in the room must get the rest of the turn',
+)
+
+const camPlayer = ghosted.players[cam]
+assert(camPlayer, 'Cam should still be in the ghost room')
+const { [cam]: _dropped, ...remainingPlayers } = ghosted.players
+const afterLeave = unwrap(
+  applyMessage(
+    { ...ghosted, players: remainingPlayers },
+    guest,
+    { type: 'guess', text: 'pizza' },
+  ),
+)
+assert(afterLeave.phase === 'reveal', 'a player who actually left must not block the last remaining guesser')
+assert(afterLeave.winnerName === 'Bob', `expected Bob after Cam left, got ${afterLeave.winnerName}`)
 
 const now = 2_000_000
 assert(
@@ -335,5 +350,83 @@ assert(
   }) === 60,
   'skewed clocks should count down from when this device started the turn',
 )
+
+assert(
+  sanitizeGameSettings({ shapeSets: ['letters', 'weird', 'letters'] }).shapeSets.join(',') ===
+    'letters,weird',
+  'hosts should be able to combine shape sets',
+)
+assert(
+  sanitizeGameSettings({ shapeSet: 'regular' }).shapeSets.join(',') === 'regular',
+  'old single shape-set rooms should still load',
+)
+
+const orderedGuesses = normalizeStoredRoom(
+  toFirebaseRoom({
+    ...emptyRoom(host, 'Ada'),
+    guesses: [
+      { id: 'g-aaa-2', playerId: 'a', name: 'Ann', text: 'later', correct: false, seq: 2 },
+      { id: 'g-zzz-1', playerId: 'z', name: 'Zed', text: 'earlier', correct: false, seq: 1 },
+    ],
+  }),
+)
+assert(orderedGuesses, 'guess room should normalize')
+assert(
+  orderedGuesses.guesses.map((guess) => guess.text).join(',') === 'earlier,later',
+  `guesses must stay in chat order, got ${orderedGuesses.guesses.map((guess) => guess.text).join(',')}`,
+)
+
+const dan = 'guest-ddd'
+const ghost = 'guest-eee'
+let voteRoom = emptyRoom(host, 'Ada')
+for (const [id, name] of [
+  [guest, 'Bob'],
+  [cam, 'Cam'],
+  [dan, 'Dan'],
+  [ghost, 'Eve'],
+] as const) {
+  const joinedVote = addPlayer(voteRoom, id, name)
+  assert(typeof joinedVote !== 'string', `${name} should join the vote room`)
+  voteRoom = joinedVote
+}
+voteRoom = {
+  ...voteRoom,
+  phase: 'voting',
+  collages: [
+    {
+      id: 'c-1',
+      round: 1,
+      artistId: host,
+      artistName: 'Ada',
+      prompt: 'pizza',
+      pieces: [],
+    },
+    {
+      id: 'c-2',
+      round: 2,
+      artistId: guest,
+      artistName: 'Bob',
+      prompt: 'moon',
+      pieces: [],
+    },
+  ],
+  votes: {},
+}
+const ghostPlayer = voteRoom.players[ghost]
+assert(ghostPlayer, 'ghost player should exist')
+voteRoom = {
+  ...voteRoom,
+  players: {
+    ...voteRoom.players,
+    [ghost]: { ...ghostPlayer, seenAt: Date.now() - 90_000 },
+  },
+}
+const voteView = toRoomState(voteRoom, host, 'TEST')
+assert(voteView.voterCount === 4, `should wait for 4 present voters, got ${voteView.voterCount}`)
+const ballot = ['c-1', 'c-2']
+for (const id of [host, guest, cam, dan]) {
+  voteRoom = unwrap(applyMessage(voteRoom, id, { type: 'vote', ranks: ballot }))
+}
+assert(voteRoom.phase === 'finale', `four present votes should finish, got ${voteRoom.phase}`)
 
 console.log('roomLogic tests passed')

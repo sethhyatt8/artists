@@ -33,6 +33,15 @@ export async function rtdbSet(path: string, data: unknown, etag?: string | null)
   return response
 }
 
+export async function rtdbPatch(path: string, data: unknown) {
+  const response = await fetch(urlFor(path), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return response
+}
+
 export async function rtdbTransaction<T>(
   path: string,
   updater: (current: unknown) => T | undefined,

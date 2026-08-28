@@ -7,13 +7,16 @@ import {
   MAX_PLAYERS,
   MAX_ROUNDS,
   MIN_ROUNDS,
+  SHAPE_SET_ORDER,
   TURN_SECONDS_OPTIONS,
+  shapeSetsLabel,
   type GameSettings,
   type Guess,
   type Player,
   type RankedCollage,
   type RoomState,
   type SavedCollage,
+  type ShapeSet,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
 import { turnRemainingSeconds } from '../game/roomLogic'
@@ -228,7 +231,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onPiecesChange={queueCanvas}
           hint={`You have ${formatTurnLength(state.settings.turnSeconds)}. Keep going until everyone guesses it or time runs out.`}
           extraRight={<GuessFeed guesses={state.guesses} />}
-          shapeSet={state.settings.shapeSet}
+          shapeSets={state.settings.shapeSets}
         />
       </main>
     )
@@ -378,11 +381,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           />
         ) : (
           <p>
-            {state.settings.shapeSet === 'regular'
-              ? 'Regular shapes'
-              : state.settings.shapeSet === 'letters'
-                ? 'Letters A–Z'
-                : 'Weird junk'}
+            {shapeSetsLabel(state.settings.shapeSets)}
             {' · '}
             {formatTurnLength(state.settings.turnSeconds)}
             {' · '}
@@ -430,40 +429,32 @@ function LobbySettings({
     onChange({ ...settings, ...next })
   }
 
+  function toggleShapeSet(set: ShapeSet) {
+    const selected = settings.shapeSets.includes(set)
+    const shapeSets = selected
+      ? settings.shapeSets.filter((item) => item !== set)
+      : [...settings.shapeSets, set]
+    if (shapeSets.length === 0) return
+    patch({ shapeSets })
+  }
+
   return (
     <div className="settings">
       <div className="field">
-        <span>Shape set</span>
+        <span>Shape sets</span>
         <div className="choice-row">
-          <button
-            className={settings.shapeSet === 'regular' ? 'btn compact primary' : 'btn ghost compact'}
-            type="button"
-            onClick={() => patch({ shapeSet: 'regular' })}
-          >
-            Regular
-          </button>
-          <button
-            className={settings.shapeSet === 'weird' ? 'btn compact primary' : 'btn ghost compact'}
-            type="button"
-            onClick={() => patch({ shapeSet: 'weird' })}
-          >
-            Weird
-          </button>
-          <button
-            className={settings.shapeSet === 'letters' ? 'btn compact primary' : 'btn ghost compact'}
-            type="button"
-            onClick={() => patch({ shapeSet: 'letters' })}
-          >
-            Letters
-          </button>
+          {SHAPE_SET_ORDER.map((set) => (
+            <button
+              key={set}
+              className={settings.shapeSets.includes(set) ? 'btn compact primary' : 'btn ghost compact'}
+              type="button"
+              onClick={() => toggleShapeSet(set)}
+            >
+              {set === 'regular' ? 'Regular' : set === 'letters' ? 'Letters' : 'Weird'}
+            </button>
+          ))}
         </div>
-        <p className="hint">
-          {settings.shapeSet === 'regular'
-            ? 'Circles, squares, and other basic shapes.'
-            : settings.shapeSet === 'letters'
-              ? 'Uppercase English letters A through Z.'
-              : 'Odd junk silhouettes: fish, shoes, wrenches, and the rest.'}
-        </p>
+        <p className="hint">Turn on as many as you want. {shapeSetsLabel(settings.shapeSets)}.</p>
       </div>
 
       <label className="field">
@@ -561,12 +552,13 @@ function GuessFeed({ guesses }: { guesses: Guess[] }) {
     <div className="guess-feed" ref={scroller}>
       <h2>Guesses</h2>
       {guesses.length === 0 ? (
-        <p className="hint">Guesses will scroll here.</p>
+        <p className="hint">Guesses show up here in order, like a chat.</p>
       ) : (
         guesses.map((guess) => (
-          <p key={guess.id} className={guess.correct ? 'guess correct' : 'guess'}>
-            <strong>{guess.name}:</strong> {guess.text}
-          </p>
+          <div key={guess.id} className={guess.correct ? 'chat-line correct' : 'chat-line'}>
+            <span className="chat-name">{guess.name}</span>
+            <span className="chat-text">{guess.text}</span>
+          </div>
         ))
       )}
     </div>

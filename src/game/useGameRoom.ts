@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isFirebaseConfigured, rtdbListen, rtdbSet, rtdbTransaction } from './rtdb'
+import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet, rtdbTransaction } from './rtdb'
 import {
   addPlayer,
   applyMessage,
   emptyRoom,
+  finishTurnIfGuessersDone,
   isSpuriousDrawEnd,
   normalizeStoredRoom,
   playerCount,
   playerRecord,
+  roomPatch,
+  staleGuestIds,
   toFirebaseRoom,
   toRoomState,
   type StoredRoom,
@@ -110,6 +113,12 @@ export function useGameRoom(session: RoomSession) {
 
     const heartbeat = window.setInterval(() => {
       void rtdbSet(`${path}/players/${id}/seenAt`, Date.now())
+      const room = latestRoom.current
+      if (!room) return
+      if (room.phase !== 'lobby' && room.phase !== 'voting' && room.phase !== 'finale') return
+      for (const staleId of staleGuestIds(room, id)) {
+        void rtdbSet(`${path}/players/${staleId}`, null)
+      }
     }, 4000)
 
     return () => {
@@ -134,6 +143,43 @@ export function useGameRoom(session: RoomSession) {
         `${path}/pieces`,
         message.pieces.length > 0 ? piecesRecord(message.pieces) : null,
       )
+      return
+    }
+
+    if (message.type === 'guess') {
+      const room = latestRoom.current
+      if (!room) return
+      const next = applyMessage(room, id, message)
+      if ('error' in next) {
+        setError(next.error)
+        return
+      }
+      latestRoom.current = next
+      latestState.current = toRoomState(next, id, code)
+      setState(latestState.current)
+      const added = next.guesses.filter(
+        (guess) => !room.guesses.some((item) => item.id === guess.id),
+      )
+      const patch: Record<string, unknown> = {}
+      const fullPatch = roomPatch(room, next)
+      delete fullPatch.pieces
+      Object.assign(patch, fullPatch)
+      if (added.length > 0) {
+        patch.guesses = Object.fromEntries(added.map((guess) => [guess.id, guess]))
+      } else {
+        delete patch.guesses
+      }
+      void rtdbPatch(path, patch).then(async () => {
+        const { data } = await rtdbGet(path)
+        const latest = normalizeStoredRoom(data)
+        if (!latest) return
+        const finished = finishTurnIfGuessersDone(latest)
+        if (finished === latest) return
+        const endPatch = roomPatch(latest, finished)
+        delete endPatch.pieces
+        if (Object.keys(endPatch).length === 0) return
+        await rtdbPatch(path, endPatch)
+      })
       return
     }
 

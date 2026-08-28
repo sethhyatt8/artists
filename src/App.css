@@ -304,8 +304,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 120px;
-  max-height: 280px;
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: min(42vh, 420px);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -313,6 +314,35 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
+}
+
+.chat-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-raise);
+}
+
+.chat-name {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-text {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.chat-line.correct {
+  background: var(--ember-dim);
+}
+
+.chat-line.correct .chat-text {
+  color: var(--ready);
 }
 
 .guess {
@@ -334,10 +364,34 @@
 .screen.room {
   width: min(440px, 100%);
   margin-inline: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
 }
 
 .screen.room.pick {
-  width: min(640px, 100%);
+  width: min(960px, 100%);
+}
+
+.screen.room.pick h1 {
+  font-size: clamp(24px, 4vw, 32px);
+}
+
+#root.wide > .screen:not(.practice) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 720px) {
+  .pick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 .guess-feed h2 {
