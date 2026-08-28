@@ -549,12 +549,13 @@ function revealLede(state: RoomState, winnerName: string | null) {
 
 function GuessFeed({ guesses }: { guesses: Guess[] }) {
   const scroller = useRef<HTMLDivElement>(null)
+  const tailKey = guesses.length > 0 ? guesses[guesses.length - 1]?.id : 'empty'
 
   useEffect(() => {
     const node = scroller.current
     if (!node) return
     node.scrollTop = node.scrollHeight
-  }, [guesses])
+  }, [guesses.length, tailKey])
 
   return (
     <div className="guess-feed" ref={scroller}>

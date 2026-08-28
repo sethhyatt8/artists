@@ -306,7 +306,9 @@
   gap: 8px;
   min-height: 120px;
   max-height: 280px;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -315,6 +317,7 @@
 
 .guess {
   margin: 0;
+  flex-shrink: 0;
   color: var(--ink);
 }
 

@@ -5,7 +5,9 @@ import {
   applyMessage,
   emptyRoom,
   isSpuriousDrawEnd,
+  normalizeStoredRoom,
   roomPatch,
+  toFirebaseRoom,
   toRoomState,
   turnRemainingSeconds,
   type StoredRoom,
@@ -101,6 +103,23 @@ assert(
   isSpuriousDrawEnd(room, { ...room, phase: 'reveal' }),
   'reveal without expiry, a winner, or a saved collage must not kill the collage',
 )
+
+const wrongA = unwrap(applyMessage(room, guest, { type: 'guess', text: 'cat' }))
+assert(wrongA.phase === 'drawing', 'a wrong guess must keep the turn going')
+assert(wrongA.guesses.length === 1, `expected one guess, got ${wrongA.guesses.length}`)
+
+const wrongB = unwrap(applyMessage(wrongA, guest, { type: 'guess', text: 'dog' }))
+assert(wrongB.phase === 'drawing', 'a second wrong guess must keep the turn going')
+assert(wrongB.guesses.length === 2, `expected two guesses, got ${wrongB.guesses.length}`)
+assert(wrongB.guesses[0]?.id === 'g-1', `first guess id=${wrongB.guesses[0]?.id}`)
+assert(wrongB.guesses[1]?.id === 'g-2', `second guess id=${wrongB.guesses[1]?.id}`)
+
+const roundtrip = normalizeStoredRoom(toFirebaseRoom(wrongB))
+assert(roundtrip?.guesses.length === 2, `firebase roundtrip lost guesses: ${roundtrip?.guesses.length}`)
+assert(roundtrip?.guessSerial === 2, `guessSerial should persist, got ${roundtrip?.guessSerial}`)
+assert(roundtrip?.guesses[1]?.text === 'dog', 'latest guess text should survive firebase roundtrip')
+
+room = wrongB
 
 const earlyGuess = unwrap(applyMessage(room, guest, { type: 'guess', text: 'pizza' }))
 assert(earlyGuess.phase === 'reveal', 'the last remaining guesser should end the turn')

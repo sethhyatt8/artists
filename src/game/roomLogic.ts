@@ -106,6 +106,58 @@ function asArray<T>(value: unknown): T[] {
     .map((key) => (value as Record<string, T>)[key])
 }
 
+function readCounter(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value))
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed))
+  }
+  return 0
+}
+
+function guessOrder(id: string) {
+  const match = id.match(/(\d+)(?:\D*)$/)
+  return match ? Number(match[1]) : 0
+}
+
+function isStoredGuess(value: unknown): value is Guess {
+  if (!value || typeof value !== 'object') return false
+  const guess = value as Partial<Guess>
+  return (
+    typeof guess.playerId === 'string' &&
+    typeof guess.name === 'string' &&
+    typeof guess.text === 'string' &&
+    typeof guess.correct === 'boolean'
+  )
+}
+
+function normalizeGuesses(raw: unknown): Guess[] {
+  const items = asArray<Guess>(raw).filter(isStoredGuess)
+  const seen = new Set<string>()
+  const guesses: Guess[] = []
+  for (const [index, guess] of items.entries()) {
+    const id =
+      typeof guess.id === 'string' && guess.id.trim() && !seen.has(guess.id)
+        ? guess.id
+        : `g-${index + 1}`
+    seen.add(id)
+    guesses.push({ ...guess, id })
+  }
+  return guesses.sort((a, b) => guessOrder(a.id) - guessOrder(b.id))
+}
+
+function guessesRecord(guesses: Guess[]) {
+  const record: Record<string, Guess> = {}
+  for (const guess of guesses) {
+    let id = guess.id
+    if (!id || record[id]) {
+      id = `g-${Object.keys(record).length + 1}`
+    }
+    record[id] = { ...guess, id }
+  }
+  return record
+}
+
 function normalizeVotes(raw: unknown): Record<string, string[]> {
   if (!raw || typeof raw !== 'object') return {}
   const votes: Record<string, string[]> = {}
@@ -173,12 +225,12 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
         ? null
         : asArray<CategoryOptions>(value.options),
     pieces: asArray<CollagePiece>(value.pieces),
-    guesses: asArray<Guess>(value.guesses),
+    guesses: normalizeGuesses(value.guesses),
     deadlineMs: typeof value.deadlineMs === 'number' ? value.deadlineMs : null,
     winnerName: typeof value.winnerName === 'string' ? value.winnerName : null,
     settings: sanitizeGameSettings(value.settings),
     round: typeof value.round === 'number' ? value.round : 0,
-    guessSerial: typeof value.guessSerial === 'number' ? value.guessSerial : 0,
+    guessSerial: readCounter(value.guessSerial),
     collages: asArray<SavedCollage>(value.collages).map((item) => ({
       id: typeof item?.id === 'string' ? item.id : 'c-0',
       round: typeof item?.round === 'number' ? item.round : 0,
@@ -197,7 +249,7 @@ export function toFirebaseRoom(room: StoredRoom) {
   return {
     ...room,
     pieces: Object.fromEntries(room.pieces.map((piece) => [piece.id, piece])),
-    guesses: Object.fromEntries(room.guesses.map((guess) => [guess.id, guess])),
+    guesses: guessesRecord(room.guesses),
   }
 }
 
@@ -521,16 +573,16 @@ export function applyMessage(
     if (!text || !room.prompt) return room
     if (hasCorrectGuess(room, senderId)) return room
     const correct = answersMatch(text, room.prompt)
-    const guessSerial = room.guessSerial + 1
+    const nextSerial = room.guessSerial + 1
     const guess: Guess = {
-      id: `g-${senderId}-${guessSerial}`,
+      id: `g-${nextSerial}`,
       playerId: senderId,
       name: player.name,
       text,
       correct,
     }
     const guesses = [...room.guesses, guess].slice(-40)
-    let next: StoredRoom = { ...room, guesses, guessSerial }
+    let next: StoredRoom = { ...room, guesses, guessSerial: nextSerial }
     if (!correct) return next
     next = {
       ...next,
