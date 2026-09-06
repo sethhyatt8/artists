@@ -9,7 +9,7 @@ export const MAX_GUESS_LENGTH = 48
 export const MIN_ROUNDS = 1
 export const MAX_ROUNDS = 10
 export const MAX_VOTE_RANKS = MAX_ROUNDS
-export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180] as const
+export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180, 300] as const
 
 export const SHAPE_SET = {
   regular: 'regular',

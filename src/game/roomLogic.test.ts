@@ -370,6 +370,10 @@ assert(
   sanitizeGameSettings({ shapeSet: 'regular' }).shapeSets.join(',') === 'regular',
   'old single shape-set rooms should still load',
 )
+assert(
+  sanitizeGameSettings({ turnSeconds: 300 }).turnSeconds === 300,
+  'hosts should be able to pick 5-minute rounds',
+)
 
 const dealt = dealPromptOptions()
 assert(
