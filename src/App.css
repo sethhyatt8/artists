@@ -411,6 +411,10 @@
   overscroll-behavior: contain;
 }
 
+#root.wide > .screen.room.vote {
+  overflow: hidden;
+}
+
 @media (min-width: 720px) {
   .pick-grid {
     display: grid;
