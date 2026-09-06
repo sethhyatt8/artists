@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
-import { answersMatch, maskSecret } from './prompts'
+import { answersMatch, dealPromptOptions, maskSecret, normalizeAnswer } from './prompts'
 import {
   addPlayer,
   applyMessage,
@@ -364,6 +364,20 @@ assert(
   'old single shape-set rooms should still load',
 )
 
+const dealt = dealPromptOptions()
+assert(dealt.length >= 3, `should deal several categories, got ${dealt.length}`)
+assert(
+  dealt.every((group) => group.prompts.length >= 3),
+  'each category should offer several prompts',
+)
+const used = dealt.flatMap((group) => group.prompts)
+const dealtAgain = dealPromptOptions(used)
+const usedNorm = new Set(used.map(normalizeAnswer))
+assert(
+  dealtAgain.flatMap((group) => group.prompts).every((prompt) => !usedNorm.has(normalizeAnswer(prompt))),
+  'later rounds should not re-deal the same prompt',
+)
+
 const orderedGuesses = normalizeStoredRoom(
   toFirebaseRoom({
     ...emptyRoom(host, 'Ada'),
@@ -434,11 +448,35 @@ voteRoom = {
   },
 }
 const voteView = toRoomState(voteRoom, host, 'TEST')
-assert(voteView.voterCount === 4, `should wait for 4 present voters, got ${voteView.voterCount}`)
+assert(voteView.voterCount === 5, `should still count every player in the room, got ${voteView.voterCount}`)
 const ballot = ['c-1', 'c-2']
 for (const id of [host, guest, cam, dan]) {
   voteRoom = unwrap(applyMessage(voteRoom, id, { type: 'vote', ranks: ballot }))
 }
-assert(voteRoom.phase === 'finale', `four present votes should finish, got ${voteRoom.phase}`)
+assert(voteRoom.phase === 'voting', 'voting must wait for the last player still in the room')
+voteRoom = unwrap(applyMessage(voteRoom, host, { type: 'closeVote' }))
+assert(voteRoom.phase === 'finale', `host should be able to count the votes we have, got ${voteRoom.phase}`)
+
+const fourVote = emptyRoom(host, 'Ada')
+let fullVote = fourVote
+for (const [id, name] of [
+  [guest, 'Bob'],
+  [cam, 'Cam'],
+  [dan, 'Dan'],
+] as const) {
+  const joinedFull = addPlayer(fullVote, id, name)
+  assert(typeof joinedFull !== 'string', `${name} should join`)
+  fullVote = joinedFull
+}
+fullVote = {
+  ...fullVote,
+  phase: 'voting',
+  collages: voteRoom.collages,
+  votes: {},
+}
+for (const id of [host, guest, cam, dan]) {
+  fullVote = unwrap(applyMessage(fullVote, id, { type: 'vote', ranks: ballot }))
+}
+assert(fullVote.phase === 'finale', 'when every listed player votes, the finale should start')
 
 console.log('roomLogic tests passed')

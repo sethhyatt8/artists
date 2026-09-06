@@ -114,6 +114,7 @@ export type ClientMessage =
   | { type: 'timesUp' }
   | { type: 'nextTurn' }
   | { type: 'vote'; ranks: string[] }
+  | { type: 'closeVote' }
   | { type: 'backToLobby' }
 
 export type ServerMessage =
@@ -141,6 +142,7 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
     if (
       parsed.type === 'timesUp' ||
       parsed.type === 'nextTurn' ||
+      parsed.type === 'closeVote' ||
       parsed.type === 'backToLobby'
     ) {
       return { type: parsed.type }
@@ -167,7 +169,7 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
       for (const item of parsed.ranks) {
         if (typeof item !== 'string' || ranks.includes(item)) continue
         ranks.push(item)
-        if (ranks.length === 3) break
+        if (ranks.length === 6) break
       }
       return { type: 'vote', ranks }
     }

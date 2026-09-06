@@ -51,6 +51,7 @@ export type StoredRoom = {
   votes: Record<string, string[]>
   guessTimes: Record<string, GuessClock>
   drawStartedMs: number | null
+  usedPrompts: string[]
 }
 
 export function emptyRoom(hostId: string, name: string): StoredRoom {
@@ -77,6 +78,7 @@ export function emptyRoom(hostId: string, name: string): StoredRoom {
     votes: {},
     guessTimes: {},
     drawStartedMs: null,
+    usedPrompts: [],
   }
 }
 
@@ -242,6 +244,7 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
     votes: normalizeVotes(value.votes),
     guessTimes: normalizeGuessTimes(value.guessTimes),
     drawStartedMs: typeof value.drawStartedMs === 'number' ? value.drawStartedMs : null,
+    usedPrompts: asArray<string>(value.usedPrompts).filter((item) => typeof item === 'string'),
   }
 }
 
@@ -291,8 +294,9 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     round: room.round,
     collages: room.collages,
     myVote,
-    votedCount: activePlayerIds(room).filter((id) => (room.votes[id]?.length ?? 0) > 0).length,
-    voterCount: activePlayerIds(room).length,
+    votedCount: Object.keys(room.players).filter((id) => (room.votes[id]?.length ?? 0) > 0)
+      .length,
+    voterCount: playerCount(room),
     favorites: rankFavorites(room.collages, room.votes),
     guessChampion: pickGuessChampion(room.guessTimes),
   }
@@ -492,6 +496,7 @@ const ROOM_KEYS: (keyof StoredRoom)[] = [
   'votes',
   'guessTimes',
   'drawStartedMs',
+  'usedPrompts',
 ]
 
 export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, unknown> {
@@ -587,6 +592,7 @@ export function applyMessage(
       votes: {},
       guessTimes: {},
       drawStartedMs: null,
+      usedPrompts: [],
       players: Object.fromEntries(
         Object.values(room.players).map((item) => [item.id, { ...item, score: 0 }]),
       ),
@@ -606,6 +612,9 @@ export function applyMessage(
       phase: 'drawing',
       deadlineMs: now + room.settings.turnSeconds * 1000,
       drawStartedMs: now,
+      usedPrompts: room.usedPrompts.includes(message.prompt)
+        ? room.usedPrompts
+        : [...room.usedPrompts, message.prompt],
     }
   }
 
@@ -663,7 +672,7 @@ export function applyMessage(
 
   if (message.type === 'vote' && room.phase === 'voting') {
     const ranks = sanitizeRanks(message.ranks, room.collages)
-    const needed = Math.min(3, room.collages.length)
+    const needed = Math.min(4, room.collages.length)
     if (ranks.length < needed) return room
     const next: StoredRoom = {
       ...room,
@@ -671,6 +680,11 @@ export function applyMessage(
     }
     if (allPlayersVoted(next)) return { ...next, phase: 'finale' }
     return next
+  }
+
+  if (message.type === 'closeVote' && isController(room, senderId) && room.phase === 'voting') {
+    if (Object.keys(room.votes).length === 0) return room
+    return { ...room, phase: 'finale' }
   }
 
   if (message.type === 'backToLobby' && isController(room, senderId)) {
@@ -696,7 +710,7 @@ function beginPick(room: StoredRoom): StoredRoom {
     artistIndex,
     artistId,
     prompt: null,
-    options: dealPromptOptions(),
+    options: dealPromptOptions(room.usedPrompts),
     pieces: [],
     guesses: [],
     deadlineMs: null,
@@ -763,21 +777,21 @@ function recordGuessTime(room: StoredRoom, playerId: string, name: string): Reco
   }
 }
 
+function allPlayersVoted(room: StoredRoom) {
+  const ids = Object.keys(room.players)
+  if (ids.length === 0) return false
+  return ids.every((id) => Array.isArray(room.votes[id]) && (room.votes[id]?.length ?? 0) > 0)
+}
+
 function sanitizeRanks(ranks: string[], collages: SavedCollage[]) {
   const ids = new Set(collages.map((item) => item.id))
   const unique: string[] = []
   for (const id of ranks) {
     if (!ids.has(id) || unique.includes(id)) continue
     unique.push(id)
-    if (unique.length === 3) break
+    if (unique.length === collages.length) break
   }
   return unique
-}
-
-function allPlayersVoted(room: StoredRoom) {
-  const ids = activePlayerIds(room)
-  if (ids.length === 0) return false
-  return ids.every((id) => Array.isArray(room.votes[id]) && (room.votes[id]?.length ?? 0) > 0)
 }
 
 function rankFavorites(
@@ -840,5 +854,6 @@ function clearTurn(room: StoredRoom): StoredRoom {
     votes: {},
     guessTimes: {},
     drawStartedMs: null,
+    usedPrompts: [],
   }
 }

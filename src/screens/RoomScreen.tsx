@@ -345,8 +345,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       <VoteScreen
         state={state}
         connectionId={connectionId}
+        isHost={isHost}
         onLeave={leave}
         onVote={(ranks) => send({ type: 'vote', ranks })}
+        onCloseVote={() => send({ type: 'closeVote' })}
       />
     )
   }
@@ -605,26 +607,30 @@ function ScoreList({
 function VoteScreen({
   state,
   connectionId,
+  isHost,
   onLeave,
   onVote,
+  onCloseVote,
 }: {
   state: RoomState
   connectionId: string
+  isHost: boolean
   onLeave: () => void
   onVote: (ranks: string[]) => void
+  onCloseVote: () => void
 }) {
-  const needed = Math.min(3, state.collages.length)
+  const needed = Math.min(4, Math.max(1, state.collages.length))
   const alreadyVoted = Boolean(state.myVote && state.myVote.length > 0)
-  const [ranks, setRanks] = useState<(string | null)[]>([null, null, null])
+  const [ranks, setRanks] = useState<(string | null)[]>(() => Array.from({ length: needed }, () => null))
 
   function setRank(collageId: string, rankIndex: number) {
     setRanks((current) => {
-      const next: (string | null)[] = [current[0] ?? null, current[1] ?? null, current[2] ?? null]
+      const next = Array.from({ length: needed }, (_, index) => current[index] ?? null)
       if (next[rankIndex] === collageId) {
         next[rankIndex] = null
         return next
       }
-      for (let index = 0; index < 3; index += 1) {
+      for (let index = 0; index < needed; index += 1) {
         if (next[index] === collageId) next[index] = null
       }
       next[rankIndex] = collageId
@@ -634,6 +640,7 @@ function VoteScreen({
 
   const chosen = ranks.filter((id): id is string => Boolean(id))
   const canSubmit = chosen.length === needed
+  const labels = ['1st', '2nd', '3rd', '4th']
 
   return (
     <main className="screen room vote">
@@ -649,7 +656,7 @@ function VoteScreen({
       <p className="lede">
         {alreadyVoted
           ? `Vote in. Waiting for everyone else (${state.votedCount} of ${state.voterCount}).`
-          : `Pick your top ${needed}. First gets 3 points, second 2, third 1.`}
+          : `Rank your top ${needed}. Look at every collage, then lock in.`}
       </p>
       <div className="vote-grid">
         {state.collages.map((collage) => {
@@ -664,23 +671,33 @@ function VoteScreen({
               you={collage.artistId === connectionId}
               voteDisabled={alreadyVoted}
               needed={needed}
+              labels={labels}
               onRank={(rankIndex) => setRank(collage.id, rankIndex)}
             />
           )
         })}
       </div>
-      {alreadyVoted ? (
-        <p className="hint">Hang tight — the finale starts when every player has voted.</p>
-      ) : (
-        <button
-          className="btn primary"
-          type="button"
-          disabled={!canSubmit}
-          onClick={() => onVote(chosen)}
-        >
-          {canSubmit ? 'Lock in vote' : `Pick ${needed} collage${needed === 1 ? '' : 's'}`}
-        </button>
-      )}
+      <div className="vote-actions">
+        {alreadyVoted ? (
+          <>
+            <p className="hint">Hang tight — the finale starts when every player has voted.</p>
+            {isHost && state.votedCount > 0 && state.votedCount < state.voterCount ? (
+              <button className="btn ghost" type="button" onClick={onCloseVote}>
+                Count the votes we have
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => onVote(chosen)}
+          >
+            {canSubmit ? 'Lock in vote' : `Pick ${needed} collage${needed === 1 ? '' : 's'}`}
+          </button>
+        )}
+      </div>
     </main>
   )
 }
@@ -735,6 +752,7 @@ function FinaleScreen({
                 place={collage.place}
                 voteDisabled
                 needed={0}
+                labels={[]}
                 points={collage.votePoints}
               />
             ))}
@@ -759,6 +777,7 @@ function CollageCard({
   you,
   voteDisabled = false,
   needed,
+  labels,
   onRank,
   points,
 }: {
@@ -767,10 +786,10 @@ function CollageCard({
   you?: boolean
   voteDisabled?: boolean
   needed: number
+  labels: string[]
   onRank?: (rankIndex: number) => void
   points?: number
 }) {
-  const labels = ['1st', '2nd', '3rd']
   return (
     <article className={place ? `vote-card ranked ranked-${place}` : 'vote-card'}>
       <div className="vote-stage">

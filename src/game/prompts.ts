@@ -32,7 +32,6 @@ export const CATEGORIES: Record<string, string[]> = {
     'Flag',
     'Flashlight',
     'Football',
-    'Glasses',
     'Globe',
     'Guitar',
     'Hammer',
@@ -121,7 +120,6 @@ export const CATEGORIES: Record<string, string[]> = {
     'Egg',
     'French fries',
     'Grapes',
-    'Hamburger',
     'Honey',
     'Hot dog',
     'Ice cream',
@@ -169,7 +167,6 @@ export const CATEGORIES: Record<string, string[]> = {
     'Caterpillar',
     'Chicken',
     'Crab',
-    'Crocodile',
     'Deer',
     'Dinosaur',
     'Dog',
@@ -437,13 +434,52 @@ export const CATEGORIES: Record<string, string[]> = {
     'When pigs fly',
     'Wild goose chase',
   ],
+  People: [
+    'Astronaut',
+    'Babysitter',
+    'Ballerina',
+    'Barber',
+    'Chef',
+    'Clown',
+    'Cowboy',
+    'Detective',
+    'DJ',
+    'Doctor',
+    'Explorer',
+    'Farmer',
+    'Firefighter',
+    'Fisherman',
+    'Gardener',
+    'King',
+    'Lifeguard',
+    'Magician',
+    'Mail carrier',
+    'Painter',
+    'Pilot',
+    'Pirate captain',
+    'Queen',
+    'Scientist',
+    'Scout',
+    'Singer',
+    'Skateboarder',
+    'Spy',
+    'Superhero',
+    'Surfer',
+    'Teacher',
+    'Treasure hunter',
+    'Vampire hunter',
+    'Viking',
+    'Waiter',
+  ],
   Silly: [
+    'A cat riding a vacuum',
     'Alien',
+    'An octopus in a tuxedo',
     'Bigfoot',
     'Cowboy',
     'Dragon',
     'Fairy',
-    'Fire',
+    'Flying toaster',
     'Genie',
     'Ghost',
     'Giant',
@@ -458,8 +494,12 @@ export const CATEGORIES: Record<string, string[]> = {
     'Robot dog',
     'Santa',
     'Snowman',
+    'Socks with faces',
     'Sorcerer',
+    'Spaghetti tornado',
     'Superhero',
+    'Talking cactus',
+    'The moon wearing sunglasses',
     'Troll',
     'Unicorn',
     'Vampire',
@@ -520,15 +560,33 @@ function shuffle<T>(items: T[]) {
   return next
 }
 
-export function dealPromptOptions(): CategoryOptions[] {
-  const names = shuffle(Object.keys(CATEGORIES)).slice(0, 3)
-  return names.map((category) => {
-    const list = CATEGORIES[category] ?? []
-    return {
+export const CATEGORIES_PER_DEAL = 4
+export const PROMPTS_PER_CATEGORY = 4
+
+export function dealPromptOptions(used: string[] = []): CategoryOptions[] {
+  const usedSet = new Set(used.map(normalizeAnswer))
+  const groups: CategoryOptions[] = []
+  for (const category of shuffle(Object.keys(CATEGORIES))) {
+    const unused = shuffle(CATEGORIES[category] ?? []).filter(
+      (prompt) => !usedSet.has(normalizeAnswer(prompt)),
+    )
+    if (unused.length === 0) continue
+    groups.push({
       category,
-      prompts: shuffle(list).slice(0, 3),
-    }
-  })
+      prompts: unused.slice(0, PROMPTS_PER_CATEGORY),
+    })
+    if (groups.length === CATEGORIES_PER_DEAL) break
+  }
+  if (groups.length > 0) return groups
+  return dealFresh()
+}
+
+function dealFresh(): CategoryOptions[] {
+  const names = shuffle(Object.keys(CATEGORIES)).slice(0, CATEGORIES_PER_DEAL)
+  return names.map((category) => ({
+    category,
+    prompts: shuffle(CATEGORIES[category] ?? []).slice(0, PROMPTS_PER_CATEGORY),
+  }))
 }
 
 export function normalizeAnswer(value: string) {
