@@ -23,7 +23,6 @@ export const CATEGORIES: Record<string, string[]> = {
     'Clock',
     'Compass',
     'Couch',
-    'Doctor',
     'Door',
     'Drum',
     'Envelope',
@@ -387,6 +386,20 @@ export const CATEGORIES: Record<string, string[]> = {
     'Up',
     'Wall-E',
     'Willy Wonka',
+    'Coco',
+    'Encanto',
+    'Inside Out',
+    'The Incredibles',
+    'How to Train Your Dragon',
+    'Paddington',
+    'Despicable Me',
+    'Minions',
+    'Ratatouille',
+    'Monsters Inc',
+    'Brave',
+    'Tangled',
+    'Lilo and Stitch',
+    'Pocahontas',
   ],
   Idioms: [
     'A drop in the bucket',
@@ -433,6 +446,20 @@ export const CATEGORIES: Record<string, string[]> = {
     'Under the weather',
     'When pigs fly',
     'Wild goose chase',
+    'A dime a dozen',
+    'Bite off more than you can chew',
+    'Caught red-handed',
+    'Chip on your shoulder',
+    'Cost an arm and a leg',
+    'Get a taste of your own medicine',
+    'Let sleeping dogs lie',
+    'On thin ice',
+    'Put all your eggs in one basket',
+    'Steal someone\'s thunder',
+    'The last straw',
+    'Two peas in a pod',
+    'Under your nose',
+    'You can\'t judge a book by its cover',
   ],
   People: [
     'Astronaut',
@@ -441,6 +468,7 @@ export const CATEGORIES: Record<string, string[]> = {
     'Barber',
     'Chef',
     'Clown',
+    'Construction worker',
     'Cowboy',
     'Detective',
     'DJ',
@@ -450,13 +478,18 @@ export const CATEGORIES: Record<string, string[]> = {
     'Firefighter',
     'Fisherman',
     'Gardener',
+    'Judge',
     'King',
+    'Librarian',
     'Lifeguard',
     'Magician',
     'Mail carrier',
+    'Nurse',
     'Painter',
+    'Photographer',
     'Pilot',
     'Pirate captain',
+    'Plumber',
     'Queen',
     'Scientist',
     'Scout',
@@ -470,20 +503,21 @@ export const CATEGORIES: Record<string, string[]> = {
     'Vampire hunter',
     'Viking',
     'Waiter',
+    'Zookeeper',
   ],
   Silly: [
     'A cat riding a vacuum',
+    'A fish riding a bicycle',
     'Alien',
     'An octopus in a tuxedo',
     'Bigfoot',
-    'Cowboy',
-    'Dragon',
+    'Dragon brushing its teeth',
     'Fairy',
     'Flying toaster',
     'Genie',
     'Ghost',
     'Giant',
-    'Knight',
+    'Knight fighting a toaster',
     'Leprechaun',
     'Mermaid',
     'Monster',
@@ -492,12 +526,11 @@ export const CATEGORIES: Record<string, string[]> = {
     'Pirate',
     'Princess',
     'Robot dog',
-    'Santa',
+    'Santa stuck in a chimney',
     'Snowman',
     'Socks with faces',
     'Sorcerer',
     'Spaghetti tornado',
-    'Superhero',
     'Talking cactus',
     'The moon wearing sunglasses',
     'Troll',
@@ -505,9 +538,78 @@ export const CATEGORIES: Record<string, string[]> = {
     'Vampire',
     'Werewolf',
     'Witch',
-    'Wizard',
+    'Wizard making pancakes',
     'Yeti',
     'Zombie',
+    'A banana on a trampoline',
+    'Dancing pickle',
+    'Flying spaghetti monster',
+    'Penguin in a tuxedo hat',
+    'Rainbow poodle',
+  ],
+  Sports: [
+    'Soccer',
+    'Basketball',
+    'Tennis',
+    'Baseball',
+    'Hockey',
+    'Golf',
+    'Bowling',
+    'Cheerleading',
+    'Finish line',
+    'Home run',
+    'Slam dunk',
+    'Olympic rings',
+    'Medal',
+    'Scoreboard',
+    'Ice rink',
+    'Boxing glove',
+    'Karate',
+    'Yoga',
+    'Weightlifting',
+    'Pom-pom',
+    'Hurdle',
+    'Relay race',
+    'Surfing contest',
+    'Ski jump',
+    'Goal',
+    'Penalty kick',
+    'Touchdown',
+    'Home plate',
+    'Puck',
+    'Tennis serve',
+  ],
+  Holidays: [
+    'Birthday party',
+    'Christmas tree',
+    'Jack-o-lantern',
+    'Menorah',
+    'Fireworks',
+    'Easter egg',
+    'Valentine',
+    'Thanksgiving dinner',
+    'New Year countdown',
+    'Pinata',
+    'Stocking',
+    'Ornament',
+    'Candy corn',
+    'Sleigh',
+    'Dreidel',
+    'Confetti',
+    'Parade',
+    'Costume party',
+    'Sparklers',
+    'Hanukkah',
+    'Fourth of July',
+    'Trick or treat',
+    'New Year baby',
+    'Wedding cake',
+    'Graduation cap',
+    'Anniversary',
+    'Lucky clover',
+    'Kwanzaa',
+    'Chinese New Year',
+    'Birthday candles',
   ],
 }
 
@@ -560,8 +662,8 @@ function shuffle<T>(items: T[]) {
   return next
 }
 
-export const CATEGORIES_PER_DEAL = 4
-export const PROMPTS_PER_CATEGORY = 4
+export const CATEGORIES_PER_DEAL = 5
+export const PROMPTS_PER_CATEGORY = 5
 
 export function dealPromptOptions(used: string[] = []): CategoryOptions[] {
   const usedSet = new Set(used.map(normalizeAnswer))
@@ -571,10 +673,9 @@ export function dealPromptOptions(used: string[] = []): CategoryOptions[] {
       (prompt) => !usedSet.has(normalizeAnswer(prompt)),
     )
     if (unused.length === 0) continue
-    groups.push({
-      category,
-      prompts: unused.slice(0, PROMPTS_PER_CATEGORY),
-    })
+    const prompts = unused.slice(0, PROMPTS_PER_CATEGORY)
+    for (const prompt of prompts) usedSet.add(normalizeAnswer(prompt))
+    groups.push({ category, prompts })
     if (groups.length === CATEGORIES_PER_DEAL) break
   }
   if (groups.length > 0) return groups
@@ -582,11 +683,15 @@ export function dealPromptOptions(used: string[] = []): CategoryOptions[] {
 }
 
 function dealFresh(): CategoryOptions[] {
+  const usedSet = new Set<string>()
   const names = shuffle(Object.keys(CATEGORIES)).slice(0, CATEGORIES_PER_DEAL)
-  return names.map((category) => ({
-    category,
-    prompts: shuffle(CATEGORIES[category] ?? []).slice(0, PROMPTS_PER_CATEGORY),
-  }))
+  return names.map((category) => {
+    const prompts = shuffle(CATEGORIES[category] ?? [])
+      .filter((prompt) => !usedSet.has(normalizeAnswer(prompt)))
+      .slice(0, PROMPTS_PER_CATEGORY)
+    for (const prompt of prompts) usedSet.add(normalizeAnswer(prompt))
+    return { category, prompts }
+  })
 }
 
 export function normalizeAnswer(value: string) {
@@ -595,6 +700,22 @@ export function normalizeAnswer(value: string) {
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+export function mergeUsedPrompts(existing: string[], extra: string[]) {
+  const seen = new Set(existing.map(normalizeAnswer))
+  const next = [...existing]
+  for (const prompt of extra) {
+    const key = normalizeAnswer(prompt)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    next.push(prompt)
+  }
+  return next
+}
+
+export function promptsFromOptions(options: CategoryOptions[]) {
+  return options.flatMap((group) => group.prompts)
 }
 
 function stem(word: string) {

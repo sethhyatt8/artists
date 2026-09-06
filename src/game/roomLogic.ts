@@ -1,6 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   MAX_PLAYERS,
+  MAX_VOTE_RANKS,
   sanitizeGameSettings,
   type ClientMessage,
   type GameSettings,
@@ -16,12 +17,14 @@ import {
   answersMatch,
   dealPromptOptions,
   maskSecret,
+  mergeUsedPrompts,
   optionExists,
+  promptsFromOptions,
   type CategoryOptions,
 } from './prompts'
 import type { CollagePiece } from './collage'
 
-const VOTE_POINTS = [3, 2, 1]
+const VOTE_POINTS = [5, 3, 2, 1]
 const DRAWING_GRACE_MS = 10_000
 const STALE_PLAYER_MS = 60_000
 
@@ -297,6 +300,9 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     votedCount: Object.keys(room.players).filter((id) => (room.votes[id]?.length ?? 0) > 0)
       .length,
     voterCount: playerCount(room),
+    waitingVoters: players
+      .filter((item) => (room.votes[item.id]?.length ?? 0) === 0)
+      .map((item) => item.name),
     favorites: rankFavorites(room.collages, room.votes),
     guessChampion: pickGuessChampion(room.guessTimes),
   }
@@ -672,7 +678,7 @@ export function applyMessage(
 
   if (message.type === 'vote' && room.phase === 'voting') {
     const ranks = sanitizeRanks(message.ranks, room.collages)
-    const needed = Math.min(4, room.collages.length)
+    const needed = Math.min(MAX_VOTE_RANKS, room.collages.length)
     if (ranks.length < needed) return room
     const next: StoredRoom = {
       ...room,
@@ -703,6 +709,7 @@ function beginPick(room: StoredRoom): StoredRoom {
   if (!artistId || !room.players[artistId]) {
     return clearTurn({ ...room, phase: 'lobby', order })
   }
+  const options = dealPromptOptions(room.usedPrompts)
   return {
     ...room,
     order,
@@ -710,12 +717,13 @@ function beginPick(room: StoredRoom): StoredRoom {
     artistIndex,
     artistId,
     prompt: null,
-    options: dealPromptOptions(room.usedPrompts),
+    options,
     pieces: [],
     guesses: [],
     deadlineMs: null,
     winnerName: null,
     drawStartedMs: null,
+    usedPrompts: mergeUsedPrompts(room.usedPrompts, promptsFromOptions(options)),
   }
 }
 
@@ -800,7 +808,7 @@ function rankFavorites(
 ): RankedCollage[] {
   const scores = new Map(collages.map((item) => [item.id, 0]))
   for (const ranks of Object.values(votes)) {
-    ranks.slice(0, 3).forEach((id, index) => {
+    ranks.forEach((id, index) => {
       const points = VOTE_POINTS[index] ?? 0
       scores.set(id, (scores.get(id) ?? 0) + points)
     })
@@ -812,7 +820,6 @@ function rankFavorites(
       place: 0,
     }))
     .sort((a, b) => b.votePoints - a.votePoints || a.round - b.round)
-    .slice(0, 3)
     .map((collage, index) => ({ ...collage, place: index + 1 }))
 }
 

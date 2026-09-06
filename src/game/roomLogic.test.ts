@@ -1,5 +1,12 @@
 import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
-import { answersMatch, dealPromptOptions, maskSecret, normalizeAnswer } from './prompts'
+import {
+  CATEGORIES_PER_DEAL,
+  PROMPTS_PER_CATEGORY,
+  answersMatch,
+  dealPromptOptions,
+  maskSecret,
+  normalizeAnswer,
+} from './prompts'
 import {
   addPlayer,
   applyMessage,
@@ -365,17 +372,47 @@ assert(
 )
 
 const dealt = dealPromptOptions()
-assert(dealt.length >= 3, `should deal several categories, got ${dealt.length}`)
 assert(
-  dealt.every((group) => group.prompts.length >= 3),
-  'each category should offer several prompts',
+  dealt.length === CATEGORIES_PER_DEAL,
+  `should deal ${CATEGORIES_PER_DEAL} categories, got ${dealt.length}`,
 )
-const used = dealt.flatMap((group) => group.prompts)
+assert(
+  dealt.every((group) => group.prompts.length === PROMPTS_PER_CATEGORY),
+  'each category should offer several unused prompts',
+)
+const dealtPrompts = dealt.flatMap((group) => group.prompts)
+const uniqueDealt = new Set(dealtPrompts.map(normalizeAnswer))
+assert(
+  uniqueDealt.size === dealtPrompts.length,
+  'one deal should not repeat the same prompt across categories',
+)
+const used = dealtPrompts
 const dealtAgain = dealPromptOptions(used)
 const usedNorm = new Set(used.map(normalizeAnswer))
 assert(
   dealtAgain.flatMap((group) => group.prompts).every((prompt) => !usedNorm.has(normalizeAnswer(prompt))),
   'later rounds should not re-deal the same prompt',
+)
+
+let promptRoom = emptyRoom(host, 'Ada')
+const promptGuest = addPlayer(promptRoom, guest, 'Bob')
+assert(typeof promptGuest !== 'string', 'prompt test guest should join')
+promptRoom = unwrap(
+  applyMessage(promptGuest, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+const firstDeal = promptRoom.options?.flatMap((group) => group.prompts) ?? []
+assert(firstDeal.length >= 20, `start should offer a large unused set, got ${firstDeal.length}`)
+assert(
+  firstDeal.every((prompt) => promptRoom.usedPrompts.includes(prompt)),
+  'offered prompts should be marked used so they do not come back next turn',
+)
+const nextDeal = dealPromptOptions(promptRoom.usedPrompts).flatMap((group) => group.prompts)
+assert(
+  nextDeal.every((prompt) => !firstDeal.includes(prompt)),
+  'the next artist should see a fresh set of prompts',
 )
 
 const orderedGuesses = normalizeStoredRoom(
@@ -478,5 +515,57 @@ for (const id of [host, guest, cam, dan]) {
   fullVote = unwrap(applyMessage(fullVote, id, { type: 'vote', ranks: ballot }))
 }
 assert(fullVote.phase === 'finale', 'when every listed player votes, the finale should start')
+
+const fourCollages = [
+  ...voteRoom.collages,
+  {
+    id: 'c-3',
+    round: 3,
+    artistId: cam,
+    artistName: 'Cam',
+    prompt: 'tree',
+    pieces: [],
+  },
+  {
+    id: 'c-4',
+    round: 4,
+    artistId: dan,
+    artistName: 'Dan',
+    prompt: 'boat',
+    pieces: [],
+  },
+]
+let allRankVote = {
+  ...fullVote,
+  phase: 'voting' as const,
+  collages: fourCollages,
+  votes: {},
+}
+allRankVote = unwrap(
+  applyMessage(allRankVote, host, { type: 'vote', ranks: ['c-1', 'c-2'] }),
+)
+assert(
+  !allRankVote.votes[host],
+  'a partial ranking should not count until every collage is ranked',
+)
+allRankVote = unwrap(
+  applyMessage(allRankVote, host, {
+    type: 'vote',
+    ranks: ['c-1', 'c-2', 'c-3', 'c-4'],
+  }),
+)
+assert(
+  allRankVote.votes[host]?.join(',') === 'c-1,c-2,c-3,c-4',
+  'players should be able to rank every drawing',
+)
+const allRankView = toRoomState(allRankVote, host, 'TEST')
+assert(
+  allRankView.waitingVoters.includes('Bob'),
+  `waiting list should name players who have not voted, got ${allRankView.waitingVoters.join(',')}`,
+)
+assert(
+  allRankView.favorites.length === 4,
+  `finale should keep every collage, got ${allRankView.favorites.length}`,
+)
 
 console.log('roomLogic tests passed')

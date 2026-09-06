@@ -8,6 +8,7 @@ export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const MAX_GUESS_LENGTH = 48
 export const MIN_ROUNDS = 1
 export const MAX_ROUNDS = 10
+export const MAX_VOTE_RANKS = MAX_ROUNDS
 export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180] as const
 
 export const SHAPE_SET = {
@@ -101,6 +102,7 @@ export type RoomState = {
   myVote: string[] | null
   votedCount: number
   voterCount: number
+  waitingVoters: string[]
   favorites: RankedCollage[]
   guessChampion: GuessChampion | null
 }
@@ -169,7 +171,7 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
       for (const item of parsed.ranks) {
         if (typeof item !== 'string' || ranks.includes(item)) continue
         ranks.push(item)
-        if (ranks.length === 6) break
+        if (ranks.length === MAX_VOTE_RANKS) break
       }
       return { type: 'vote', ranks }
     }
