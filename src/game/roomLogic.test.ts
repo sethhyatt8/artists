@@ -5,6 +5,7 @@ import {
   applyMessage,
   emptyRoom,
   isSpuriousDrawEnd,
+  mergeGuessLists,
   normalizeStoredRoom,
   roomPatch,
   toFirebaseRoom,
@@ -111,8 +112,8 @@ assert(wrongA.guesses.length === 1, `expected one guess, got ${wrongA.guesses.le
 const wrongB = unwrap(applyMessage(wrongA, guest, { type: 'guess', text: 'dog' }))
 assert(wrongB.phase === 'drawing', 'a second wrong guess must keep the turn going')
 assert(wrongB.guesses.length === 2, `expected two guesses, got ${wrongB.guesses.length}`)
-assert(wrongB.guesses[0]?.id === 'g-1', `first guess id=${wrongB.guesses[0]?.id}`)
-assert(wrongB.guesses[1]?.id === 'g-2', `second guess id=${wrongB.guesses[1]?.id}`)
+assert(wrongB.guesses[0]?.id === `g-1-${guest}`, `first guess id=${wrongB.guesses[0]?.id}`)
+assert(wrongB.guesses[1]?.id === `g-2-${guest}`, `second guess id=${wrongB.guesses[1]?.id}`)
 
 const roundtrip = normalizeStoredRoom(toFirebaseRoom(wrongB))
 assert(roundtrip?.guesses.length === 2, `firebase roundtrip lost guesses: ${roundtrip?.guesses.length}`)
@@ -217,12 +218,14 @@ const camDuringDraw = toRoomState(multi, cam, 'TEST')
 const masked = camDuringDraw.guesses.find((guess) => guess.playerId === guest)
 assert(masked?.correct, 'Cam should see that Bob got it')
 assert(masked?.text === '*****', `Cam must see a masked guess, got ${masked?.text}`)
+assert(camDuringDraw.prompt === null, 'Cam must not see the answer after Bob solves')
 
 const bobDuringDraw = toRoomState(multi, guest, 'TEST')
 assert(
   bobDuringDraw.guesses.find((guess) => guess.playerId === guest)?.text === 'pizza',
   'Bob should still see his own correct guess',
 )
+assert(bobDuringDraw.prompt === 'pizza', 'the solver should see the answer after getting it')
 
 const adaDuringDraw = toRoomState(multi, host, 'TEST')
 assert(
@@ -374,6 +377,15 @@ assert(orderedGuesses, 'guess room should normalize')
 assert(
   orderedGuesses.guesses.map((guess) => guess.text).join(',') === 'earlier,later',
   `guesses must stay in chat order, got ${orderedGuesses.guesses.map((guess) => guess.text).join(',')}`,
+)
+
+const merged = mergeGuessLists(
+  [{ id: 'g-1-a', playerId: 'a', name: 'Ann', text: 'cat', correct: false, seq: 1 }],
+  [{ id: 'g-2-b', playerId: 'b', name: 'Bob', text: 'dog', correct: false, seq: 2 }],
+)
+assert(
+  merged.map((guess) => guess.text).join(',') === 'cat,dog',
+  `merging guess lists must keep both lines, got ${merged.map((guess) => guess.text).join(',')}`,
 )
 
 const dan = 'guest-ddd'

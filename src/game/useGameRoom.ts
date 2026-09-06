@@ -6,10 +6,12 @@ import {
   emptyRoom,
   finishTurnIfGuessersDone,
   isSpuriousDrawEnd,
+  mergeGuessLists,
   normalizeStoredRoom,
   playerCount,
   playerRecord,
   roomPatch,
+  sameDrawTurn,
   staleGuestIds,
   toFirebaseRoom,
   toRoomState,
@@ -64,7 +66,7 @@ export function useGameRoom(session: RoomSession) {
     const stopListen = rtdbListen(path, (data) => {
       const room = normalizeStoredRoom(data)
       if (!room) return
-      const visible = room.players[id]
+      let visible = room.players[id]
         ? room
         : ({
             ...room,
@@ -73,6 +75,12 @@ export function useGameRoom(session: RoomSession) {
       setError(null)
       if (latestRoom.current && isSpuriousDrawEnd(latestRoom.current, visible)) {
         return
+      }
+      if (latestRoom.current && sameDrawTurn(latestRoom.current, visible)) {
+        visible = {
+          ...visible,
+          guesses: mergeGuessLists(latestRoom.current.guesses, visible.guesses),
+        }
       }
       latestRoom.current = visible
       latestState.current = toRoomState(visible, id, code)
@@ -160,23 +168,28 @@ export function useGameRoom(session: RoomSession) {
       const added = next.guesses.filter(
         (guess) => !room.guesses.some((item) => item.id === guess.id),
       )
-      const patch: Record<string, unknown> = {}
-      const fullPatch = roomPatch(room, next)
-      delete fullPatch.pieces
-      Object.assign(patch, fullPatch)
-      if (added.length > 0) {
-        patch.guesses = Object.fromEntries(added.map((guess) => [guess.id, guess]))
-      } else {
-        delete patch.guesses
-      }
-      void rtdbPatch(path, patch).then(async () => {
+      const patch = roomPatch(room, next)
+      delete patch.pieces
+      delete patch.guesses
+      void Promise.all([
+        ...added.map((guess) => rtdbSet(`${path}/guesses/${guess.id}`, guess)),
+        Object.keys(patch).length > 0 ? rtdbPatch(path, patch) : Promise.resolve(),
+      ]).then(async () => {
         const { data } = await rtdbGet(path)
         const latest = normalizeStoredRoom(data)
         if (!latest) return
-        const finished = finishTurnIfGuessersDone(latest)
-        if (finished === latest) return
-        const endPatch = roomPatch(latest, finished)
+        const merged =
+          latestRoom.current && sameDrawTurn(latestRoom.current, latest)
+            ? { ...latest, guesses: mergeGuessLists(latestRoom.current.guesses, latest.guesses) }
+            : latest
+        latestRoom.current = merged
+        latestState.current = toRoomState(merged, id, code)
+        setState(latestState.current)
+        const finished = finishTurnIfGuessersDone(merged)
+        if (finished === merged) return
+        const endPatch = roomPatch(merged, finished)
         delete endPatch.pieces
+        delete endPatch.guesses
         if (Object.keys(endPatch).length === 0) return
         await rtdbPatch(path, endPatch)
       })

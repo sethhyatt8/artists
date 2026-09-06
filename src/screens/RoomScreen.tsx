@@ -247,12 +247,17 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     ).size
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={seconds} onLeave={leave} />
+        <TurnHeader
+          state={state}
+          seconds={seconds}
+          onLeave={leave}
+          prompt={alreadyGotIt ? state.prompt : undefined}
+        />
         <p className="hint">
           {alreadyGotIt
             ? 'You got it! Don’t say the word out loud.'
             : `${state.artistName} is collaging. Type what you think it is.`}
-          {guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
+          {!alreadyGotIt && guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
         </p>
         <div className="practice-body guesser-body">
           <div className="canvas-stage">
@@ -267,7 +272,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           <aside className="sidebar sidebar-right">
             <GuessFeed guesses={state.guesses} />
             {alreadyGotIt ? (
-              <p className="hint">Your guess is in. Hang tight until the turn ends.</p>
+              <div className="got-it-banner">
+                <p className="got-it-title">You got it!</p>
+                {state.prompt ? (
+                  <p className="got-it-answer">{state.prompt}</p>
+                ) : null}
+                <p className="hint">Don’t say it out loud. Hang tight until the turn ends.</p>
+              </div>
             ) : (
               <form className="guess-form" onSubmit={sendGuess} autoComplete="off">
                 <label className="field">

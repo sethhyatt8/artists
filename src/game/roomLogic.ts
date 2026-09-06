@@ -255,8 +255,10 @@ export function toFirebaseRoom(room: StoredRoom) {
 
 export function toRoomState(room: StoredRoom, selfId: string, roomCode: string): RoomState {
   const isArtist = selfId === room.artistId
+  const solved = hasCorrectGuess(room, selfId)
   const showPrompt =
     (isArtist && room.phase === 'drawing') ||
+    (solved && room.phase === 'drawing') ||
     room.phase === 'reveal' ||
     room.phase === 'voting' ||
     room.phase === 'finale'
@@ -392,6 +394,23 @@ export function sortGuesses(guesses: Guess[]) {
   })
 }
 
+export function mergeGuessLists(prev: Guess[], next: Guess[]) {
+  const map = new Map<string, Guess>()
+  for (const guess of prev) map.set(guess.id, guess)
+  for (const guess of next) map.set(guess.id, guess)
+  return sortGuesses([...map.values()]).slice(-40)
+}
+
+export function sameDrawTurn(prev: StoredRoom, next: StoredRoom) {
+  return (
+    prev.phase === 'drawing' &&
+    next.phase === 'drawing' &&
+    prev.round === next.round &&
+    prev.artistId === next.artistId &&
+    prev.drawStartedMs === next.drawStartedMs
+  )
+}
+
 function guessSeq(guess: Guess) {
   if (typeof guess.seq === 'number') return guess.seq
   const match = /-(\d+)$/.exec(guess.id)
@@ -483,6 +502,8 @@ export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, un
       const value = next[key]
       if (Array.isArray(value) && value.length === 0) {
         patch[key] = null
+      } else if (key === 'guesses' && Array.isArray(value)) {
+        patch[key] = guessesRecord(value as Guess[])
       } else {
         patch[key] = value ?? null
       }
@@ -599,7 +620,7 @@ export function applyMessage(
     const correct = answersMatch(text, room.prompt)
     const nextSerial = room.guessSerial + 1
     const guess: Guess = {
-      id: `g-${nextSerial}`,
+      id: `g-${nextSerial}-${senderId}`,
       playerId: senderId,
       name: player.name,
       text,

@@ -316,10 +316,35 @@
   background: var(--bg);
 }
 
+.got-it-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--ready);
+  border-radius: 12px;
+  background: var(--ember-dim);
+}
+
+.got-it-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  color: var(--ready);
+}
+
+.got-it-answer {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .chat-line {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex-shrink: 0;
   padding: 8px 10px;
   border-radius: 10px;
   background: var(--bg-raise);
@@ -556,6 +581,10 @@
 @media (min-width: 960px) {
   .practice .hint {
     display: none;
+  }
+
+  .got-it-banner .hint {
+    display: block;
   }
 
   .gallery-stage {
