@@ -659,23 +659,6 @@ function VoteScreen({
             : `Vote in. Waiting for everyone else (${state.votedCount} of ${state.voterCount}).`
           : `Tap every drawing in order, favorite first. Rank all ${needed} so every collage gets a vote.`}
       </p>
-      <div className="vote-grid">
-        {state.collages.map((collage) => {
-          const place = alreadyVoted
-            ? (state.myVote?.indexOf(collage.id) ?? -1)
-            : ranks.indexOf(collage.id)
-          return (
-            <CollageCard
-              key={collage.id}
-              collage={collage}
-              place={place >= 0 ? place + 1 : null}
-              you={collage.artistId === connectionId}
-              voteDisabled={alreadyVoted}
-              onRank={() => rankCollage(collage.id)}
-            />
-          )
-        })}
-      </div>
       <div className="vote-actions">
         {alreadyVoted ? (
           <>
@@ -716,6 +699,23 @@ function VoteScreen({
             ) : null}
           </>
         )}
+      </div>
+      <div className="vote-grid">
+        {state.collages.map((collage) => {
+          const place = alreadyVoted
+            ? (state.myVote?.indexOf(collage.id) ?? -1)
+            : ranks.indexOf(collage.id)
+          return (
+            <CollageCard
+              key={collage.id}
+              collage={collage}
+              place={place >= 0 ? place + 1 : null}
+              you={collage.artistId === connectionId}
+              voteDisabled={alreadyVoted}
+              onRank={() => rankCollage(collage.id)}
+            />
+          )
+        })}
       </div>
     </main>
   )
