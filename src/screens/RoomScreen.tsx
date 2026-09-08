@@ -21,6 +21,7 @@ import {
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
 import { turnRemainingSeconds } from '../game/roomLogic'
+import { CharacterAvatar } from '../components/CharacterAvatar'
 
 type RoomScreenProps = {
   session: RoomSession
@@ -232,7 +233,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           pieces={pieces}
           onPiecesChange={queueCanvas}
           hint={`You have ${formatTurnLength(state.settings.turnSeconds)}. Keep going until everyone guesses it or time runs out.`}
-          extraRight={<GuessFeed guesses={state.guesses} />}
+          extraRight={<GuessFeed guesses={state.guesses} players={state.players} />}
           shapeSets={state.settings.shapeSets}
         />
       </main>
@@ -272,7 +273,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             />
           </div>
           <aside className="sidebar sidebar-right">
-            <GuessFeed guesses={state.guesses} />
+            <GuessFeed guesses={state.guesses} players={state.players} />
             {alreadyGotIt ? (
               <div className="got-it-banner">
                 <p className="got-it-title">You got it!</p>
@@ -324,7 +325,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             />
           </div>
           <aside className="sidebar sidebar-right">
-            <GuessFeed guesses={state.guesses} />
+            <GuessFeed guesses={state.guesses} players={state.players} />
             <ScoreList players={state.players} connectionId={connectionId} />
             {state.round < state.settings.rounds ? (
               <p className="hint">Next artist: {nextArtistName(state)}</p>
@@ -553,9 +554,16 @@ function revealLede(state: RoomState, winnerName: string | null) {
   return 'Time’s up — nobody guessed it.'
 }
 
-function GuessFeed({ guesses }: { guesses: Guess[] }) {
+function GuessFeed({
+  guesses,
+  players,
+}: {
+  guesses: Guess[]
+  players: Player[]
+}) {
   const scroller = useRef<HTMLDivElement>(null)
   const tailKey = guesses.length > 0 ? guesses[guesses.length - 1]?.id : 'empty'
+  const byId = new Map(players.map((player) => [player.id, player]))
 
   useEffect(() => {
     const node = scroller.current
@@ -569,12 +577,22 @@ function GuessFeed({ guesses }: { guesses: Guess[] }) {
       {guesses.length === 0 ? (
         <p className="hint">Guesses show up here in order, like a chat.</p>
       ) : (
-        guesses.map((guess) => (
-          <div key={guess.id} className={guess.correct ? 'chat-line correct' : 'chat-line'}>
-            <span className="chat-name">{guess.name}</span>
-            <span className="chat-text">{guess.text}</span>
-          </div>
-        ))
+        guesses.map((guess) => {
+          const player = byId.get(guess.playerId)
+          return (
+            <div key={guess.id} className={guess.correct ? 'chat-line correct' : 'chat-line'}>
+              <span className="chat-name">
+                <CharacterAvatar
+                  characterId={player?.characterId}
+                  name={guess.name}
+                  size={22}
+                />
+                {guess.name}
+              </span>
+              <span className="chat-text">{guess.text}</span>
+            </div>
+          )
+        })
       )}
     </div>
   )
@@ -594,6 +612,11 @@ function ScoreList({
       {players.map((player) => (
         <li key={player.id}>
           <span className="player-name">
+            <CharacterAvatar
+              characterId={player.characterId}
+              name={player.name}
+              size={32}
+            />
             {player.name}
             {player.id === connectionId ? ' (you)' : ''}
           </span>
@@ -712,6 +735,7 @@ function VoteScreen({
               place={place >= 0 ? place + 1 : null}
               you={collage.artistId === connectionId}
               voteDisabled={alreadyVoted}
+              characterId={state.players.find((player) => player.id === collage.artistId)?.characterId}
               onRank={() => rankCollage(collage.id)}
             />
           )
@@ -771,6 +795,7 @@ function FinaleScreen({
                 place={collage.place}
                 voteDisabled
                 points={collage.votePoints}
+                characterId={state.players.find((player) => player.id === collage.artistId)?.characterId}
               />
             ))}
           </div>
@@ -795,6 +820,7 @@ function CollageCard({
   voteDisabled = false,
   onRank,
   points,
+  characterId,
 }: {
   collage: SavedCollage | RankedCollage
   place: number | null
@@ -802,6 +828,7 @@ function CollageCard({
   voteDisabled?: boolean
   onRank?: () => void
   points?: number
+  characterId?: string
 }) {
   const canRank = Boolean(onRank) && !voteDisabled
   return (
@@ -832,7 +859,12 @@ function CollageCard({
       </div>
       <div className="vote-meta">
         <p className="vote-prompt">{collage.prompt}</p>
-        <p className="hint">
+        <p className="hint vote-artist">
+          <CharacterAvatar
+            characterId={characterId}
+            name={collage.artistName}
+            size={22}
+          />
           {collage.artistName}
           {you ? ' (you)' : ''}
           {' · '}round {collage.round}

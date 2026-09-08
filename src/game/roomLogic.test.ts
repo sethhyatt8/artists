@@ -375,6 +375,29 @@ assert(
   'hosts should be able to pick 5-minute rounds',
 )
 
+const sethRoom = emptyRoom(host, 'Captain', 'seth')
+assert(sethRoom.players[host]?.characterId === 'seth', 'host profile should join with a character')
+assert(sethRoom.players[host]?.name === 'Captain', 'tonight’s name can differ from the character')
+const emilyJoin = addPlayer(sethRoom, guest, 'Em', 'emily')
+assert(typeof emilyJoin !== 'string', 'character guest should join')
+assert(emilyJoin.players[guest]?.characterId === 'emily', 'join should keep the selected character')
+const guestAgain = addPlayer(emilyJoin, guest, 'Mystery', null)
+assert(typeof guestAgain !== 'string', 'same player can switch to guest')
+assert(
+  guestAgain.players[guest]?.characterId === undefined,
+  'playing as a guest should drop the saved character',
+)
+const restored = normalizeStoredRoom(
+  toFirebaseRoom({
+    ...sethRoom,
+    players: {
+      ...sethRoom.players,
+      [guest]: { id: guest, name: 'Em', score: 0, characterId: 'emily' },
+    },
+  }),
+)
+assert(restored?.players[guest]?.characterId === 'emily', 'character ids should survive firebase')
+
 const dealt = dealPromptOptions()
 assert(
   dealt.length === CATEGORIES_PER_DEAL,

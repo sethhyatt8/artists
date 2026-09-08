@@ -57,13 +57,17 @@ export type StoredRoom = {
   usedPrompts: string[]
 }
 
-export function emptyRoom(hostId: string, name: string): StoredRoom {
+export function emptyRoom(
+  hostId: string,
+  name: string,
+  characterId?: string | null,
+): StoredRoom {
   return {
     phase: 'lobby',
     hostId,
     createdBy: hostId,
     players: {
-      [hostId]: { id: hostId, name, score: 0, seenAt: Date.now() },
+      [hostId]: playerRecord(hostId, name, 0, characterId),
     },
     order: [hostId],
     artistIndex: 0,
@@ -197,13 +201,28 @@ function normalizePlayers(raw: unknown): Record<string, Player> {
       name: typeof item.name === 'string' && item.name.trim() ? item.name : 'Artist',
       score: typeof item.score === 'number' ? item.score : 0,
       seenAt: typeof item.seenAt === 'number' ? item.seenAt : undefined,
+      characterId:
+        typeof item.characterId === 'string' && item.characterId.trim()
+          ? item.characterId
+          : undefined,
     }
   }
   return players
 }
 
-export function playerRecord(id: string, name: string, score = 0): Player {
-  return { id, name, score, seenAt: Date.now() }
+export function playerRecord(
+  id: string,
+  name: string,
+  score = 0,
+  characterId?: string | null,
+): Player {
+  return {
+    id,
+    name,
+    score,
+    seenAt: Date.now(),
+    characterId: characterId || undefined,
+  }
 }
 
 export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
@@ -523,13 +542,25 @@ export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, un
   return patch
 }
 
-export function addPlayer(room: StoredRoom, id: string, name: string): StoredRoom | string {
+export function addPlayer(
+  room: StoredRoom,
+  id: string,
+  name: string,
+  characterId?: string | null,
+): StoredRoom | string {
   if (room.players[id]) {
+    const current = room.players[id]
     return pinnedHost({
       ...room,
       players: {
         ...room.players,
-        [id]: { ...room.players[id], name, seenAt: Date.now() },
+        [id]: {
+          ...current,
+          name,
+          seenAt: Date.now(),
+          characterId:
+            characterId === undefined ? current.characterId : characterId || undefined,
+        },
       },
     })
   }
@@ -538,7 +569,7 @@ export function addPlayer(room: StoredRoom, id: string, name: string): StoredRoo
     ...room,
     players: {
       ...room.players,
-      [id]: { id, name, score: 0, seenAt: Date.now() },
+      [id]: playerRecord(id, name, 0, characterId),
     },
     order: room.order.includes(id) ? room.order : [...room.order, id],
   })

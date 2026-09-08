@@ -350,11 +350,57 @@
   background: var(--bg-raise);
 }
 
+.player-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.player-name svg {
+  flex-shrink: 0;
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.character-pick {
+  appearance: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-raise);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.character-pick.selected {
+  border-color: var(--ember);
+  background: var(--ember-dim);
+}
+
 .chat-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.vote-artist {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-text {

@@ -49,6 +49,7 @@ export type Player = {
   name: string
   score: number
   seenAt?: number
+  characterId?: string
 }
 
 export type Guess = {

@@ -18,11 +18,13 @@ import {
   type StoredRoom,
 } from './roomLogic'
 import { sanitizeName, type ClientMessage, type RoomState } from './protocol'
+import { sanitizeCharacterId } from './characters'
 
 export type RoomSession = {
   roomCode: string
   name: string
   intent: 'create' | 'join'
+  characterId?: string
 }
 
 function tabId() {
@@ -60,6 +62,7 @@ export function useGameRoom(session: RoomSession) {
     const code = session.roomCode
     const id = selfId.current
     const name = sanitizeName(session.name)
+    const characterId = sanitizeCharacterId(session.characterId) ?? null
     const path = `rooms/${code}`
     let stopped = false
 
@@ -70,7 +73,7 @@ export function useGameRoom(session: RoomSession) {
         ? room
         : ({
             ...room,
-            players: { ...room.players, [id]: playerRecord(id, name) },
+            players: { ...room.players, [id]: playerRecord(id, name, 0, characterId) },
           } satisfies StoredRoom)
       setError(null)
       if (latestRoom.current && isSpuriousDrawEnd(latestRoom.current, visible)) {
@@ -91,14 +94,14 @@ export function useGameRoom(session: RoomSession) {
       const room = normalizeStoredRoom(current)
       if (session.intent === 'join') {
         if (!room || playerCount(room) === 0) return undefined
-        const next = addPlayer(room, id, name)
+        const next = addPlayer(room, id, name, characterId)
         return typeof next === 'string' ? undefined : toFirebaseRoom(next)
       }
       if (room && playerCount(room) > 0) {
-        const next = addPlayer(room, id, name)
+        const next = addPlayer(room, id, name, characterId)
         return typeof next === 'string' ? undefined : toFirebaseRoom(next)
       }
-      return toFirebaseRoom(emptyRoom(id, name))
+      return toFirebaseRoom(emptyRoom(id, name, characterId))
     })
       .then((result) => {
         if (stopped) return
@@ -135,7 +138,7 @@ export function useGameRoom(session: RoomSession) {
       window.clearInterval(heartbeat)
       void rtdbSet(`${path}/players/${id}`, null)
     }
-  }, [session.intent, session.name, session.roomCode])
+  }, [session.intent, session.name, session.roomCode, session.characterId])
 
   const send = useCallback((message: ClientMessage) => {
     if (!isFirebaseConfigured()) return
