@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { CHARACTERS, findCharacter } from '../game/characters'
 import {
@@ -33,6 +33,10 @@ export function HomeScreen({
   const [mode, setMode] = useState<'choose' | 'join'>(
     initialCode ? 'join' : 'choose',
   )
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
 
   const selected = findCharacter(characterId)
   const cleanedName = useMemo(() => name.replace(/\s+/g, ' ').trim(), [name])
