@@ -1264,19 +1264,19 @@
     animation: burst-veil 0.9s ease both;
   }
 
-  .avatar-pose .pose-idle {
+  body:not(.preview-motion) .avatar-pose .pose-idle {
     animation: none;
     opacity: 0;
   }
 
-  .avatar-pose .pose-surprise {
+  body:not(.preview-motion) .avatar-pose .pose-surprise {
     animation: none;
     opacity: 1;
     transform: none;
     filter: none;
   }
 
-  .avatar-pose .pose-alt {
+  body:not(.preview-motion) .avatar-pose .pose-alt {
     animation: none;
     opacity: 0;
   }
@@ -1284,4 +1284,47 @@
 
 .finale-grid {
   margin-top: 12px;
+}
+
+.celebration-preview {
+  width: min(980px, 100%);
+  margin-inline: auto;
+  gap: 16px;
+}
+
+.celebration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.celebration-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg-raise);
+}
+
+.celebration-card figcaption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.celebration-card figcaption span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .celebration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

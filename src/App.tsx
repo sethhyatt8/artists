@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { normalizeRoomCode } from './game/protocol'
+import { CelebrationPreview } from './screens/CelebrationPreview'
 import { HomeScreen } from './screens/HomeScreen'
 import { PracticeScreen } from './screens/PracticeScreen'
 import { RoomScreen } from './screens/RoomScreen'
@@ -15,32 +16,43 @@ function readPracticeFromUrl() {
   return new URLSearchParams(window.location.search).has('practice')
 }
 
+function readCelebrationsFromUrl() {
+  return new URLSearchParams(window.location.search).has('celebrations')
+}
+
 export default function App() {
   const initialCode = useMemo(() => readRoomFromUrl(), [])
   const [session, setSession] = useState<RoomSession | null>(null)
   const [practice, setPractice] = useState(() => readPracticeFromUrl() && !initialCode)
+  const [celebrations, setCelebrations] = useState(
+    () => readCelebrationsFromUrl() && !initialCode,
+  )
 
   useEffect(() => {
     const root = document.getElementById('root')
-    root?.classList.toggle('wide', practice || Boolean(session))
+    root?.classList.toggle('wide', practice || celebrations || Boolean(session))
     return () => root?.classList.remove('wide')
-  }, [practice, session])
+  }, [practice, celebrations, session])
 
   function enter(next: RoomSession) {
     const url = new URL(window.location.href)
     url.searchParams.delete('practice')
+    url.searchParams.delete('celebrations')
     url.searchParams.set('room', next.roomCode)
     window.history.replaceState(null, '', url)
     setPractice(false)
+    setCelebrations(false)
     setSession(next)
   }
 
   function enterPractice() {
     const url = new URL(window.location.href)
     url.searchParams.delete('room')
+    url.searchParams.delete('celebrations')
     url.searchParams.set('practice', '1')
     window.history.replaceState(null, '', url)
     setSession(null)
+    setCelebrations(false)
     setPractice(true)
   }
 
@@ -48,9 +60,15 @@ export default function App() {
     const url = new URL(window.location.href)
     url.searchParams.delete('room')
     url.searchParams.delete('practice')
+    url.searchParams.delete('celebrations')
     window.history.replaceState(null, '', url)
     setSession(null)
     setPractice(false)
+    setCelebrations(false)
+  }
+
+  if (celebrations) {
+    return <CelebrationPreview onLeave={leave} />
   }
 
   if (practice) {
