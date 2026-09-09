@@ -7,9 +7,11 @@ const CUE_MS = 2200
 export function LocalCues({
   cue,
   onCue,
+  showButton,
 }: {
   cue?: RoomCue | null
   onCue: () => void
+  showButton: boolean
 }) {
   const [visible, setVisible] = useState(false)
 
@@ -30,11 +32,14 @@ export function LocalCues({
 
   return (
     <>
-      <div className="local-cues">
-        <button className="btn compact local-cue-btn" type="button" onClick={fire}>
-          No spelling!!!!!
-        </button>
-      </div>
+      {showButton ? (
+        <div className="local-cues">
+          <p className="local-cues-label">This computer</p>
+          <button className="btn compact local-cue-btn" type="button" onClick={fire}>
+            No spelling!!!!!
+          </button>
+        </div>
+      ) : null}
       {visible && typeof document !== 'undefined'
         ? createPortal(
             <div className="local-cue-overlay" role="status" aria-live="assertive">

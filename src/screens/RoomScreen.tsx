@@ -30,6 +30,21 @@ type RoomScreenProps = {
   onLeave: () => void
 }
 
+const CUE_BOARD_KEY = 'artists-cue-board'
+
+function cueBoardStorageKey(roomCode: string) {
+  return `${CUE_BOARD_KEY}:${roomCode}`
+}
+
+function isCueBoardComputer(session: RoomSession) {
+  if (session.intent === 'create') return true
+  try {
+    return localStorage.getItem(cueBoardStorageKey(session.roomCode)) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const { state, error, status, send, disconnect } = useGameRoom(session)
   const [copied, setCopied] = useState(false)
@@ -41,6 +56,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
 
   const connectionId = state?.selfId ?? ''
   const isHost = session.intent === 'create'
+  const showCueButton = isCueBoardComputer(session)
   const isArtist = Boolean(state && state.artistId === connectionId)
   const seconds = useTurnCountdown(state)
   const winnerName =
@@ -57,6 +73,15 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   function fireNoSpelling() {
     send({ type: 'cue', kind: 'no-spelling' })
   }
+
+  useEffect(() => {
+    if (session.intent !== 'create') return
+    try {
+      localStorage.setItem(cueBoardStorageKey(session.roomCode), '1')
+    } catch {
+      // Private browsing can block localStorage; the create-session still shows the button.
+    }
+  }, [session.intent, session.roomCode])
 
   useEffect(() => {
     if (!copied) return
@@ -181,7 +206,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking' && isArtist && state.options) {
     return (
       <main className="screen room pick">
-        <TurnHeader state={state} seconds={null} onLeave={leave} onCue={fireNoSpelling} />
+        <TurnHeader
+          state={state}
+          seconds={null}
+          onLeave={leave}
+          onCue={fireNoSpelling}
+          showCueButton={showCueButton}
+        />
         <p className="lede">
           Pick one prompt. The {formatTurnLength(state.settings.turnSeconds)} timer
           starts as soon as you tap it.
@@ -212,7 +243,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking') {
     return (
       <main className="screen room">
-        <TurnHeader state={state} seconds={null} onLeave={leave} onCue={fireNoSpelling} />
+        <TurnHeader
+          state={state}
+          seconds={null}
+          onLeave={leave}
+          onCue={fireNoSpelling}
+          showCueButton={showCueButton}
+        />
         <section className="panel">
           <h2>{state.artistName} is picking</h2>
           <p>The artist is choosing a prompt from a few categories. Get ready to guess.</p>
@@ -235,6 +272,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
+          showCueButton={showCueButton}
         />
         <p className="hint">
           Collage that prompt. Guessers can see your board live.
@@ -268,6 +306,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={alreadyGotIt ? state.prompt : undefined}
           onCue={fireNoSpelling}
+          showCueButton={showCueButton}
         />
         <p className="hint">
           {alreadyGotIt
@@ -331,6 +370,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
+          showCueButton={showCueButton}
         />
         <p className="lede">{revealLede(state, winnerName)}</p>
         <div className="practice-body guesser-body">
@@ -545,12 +585,14 @@ function TurnHeader({
   onLeave,
   prompt,
   onCue,
+  showCueButton,
 }: {
   state: RoomState
   seconds: number | null
   onLeave: () => void
   prompt?: string | null
   onCue: () => void
+  showCueButton: boolean
 }) {
   return (
     <header className="practice-header">
@@ -563,7 +605,9 @@ function TurnHeader({
         <h1>{prompt ?? (state.phase === 'drawing' ? 'Guess!' : 'Artists')}</h1>
       </div>
       <div className="turn-tools">
-        {state.phase === 'drawing' ? <LocalCues cue={state.cue} onCue={onCue} /> : null}
+        {state.phase === 'drawing' ? (
+          <LocalCues cue={state.cue} onCue={onCue} showButton={showCueButton} />
+        ) : null}
         {seconds !== null ? (
           <p className={seconds <= 10 ? 'timer urgent' : 'timer'}>{formatTime(seconds)}</p>
         ) : null}
