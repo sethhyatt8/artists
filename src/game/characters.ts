@@ -10,8 +10,7 @@ export type Character = {
   ink: string
   look: CharacterLook
   portrait?: string
-  surprisePortrait?: string
-  altPortrait?: string
+  celebrateFrames?: [string, string, string, string]
 }
 
 export const CHARACTERS: Character[] = [
@@ -23,7 +22,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'cap',
     portrait: 'seth.png',
-    surprisePortrait: 'seth-surprise.png',
+    celebrateFrames: ['seth-f1.png', 'seth-f2.png', 'seth-f3.png', 'seth-f4.png'],
   },
   {
     id: 'emily',
@@ -33,7 +32,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'flower',
     portrait: 'emily.png',
-    surprisePortrait: 'emily-surprise.png',
+    celebrateFrames: ['emily-f1.png', 'emily-f2.png', 'emily-f3.png', 'emily-f4.png'],
   },
   {
     id: 'harper',
@@ -43,7 +42,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'star',
     portrait: 'harper.png',
-    surprisePortrait: 'harper-surprise.png',
+    celebrateFrames: ['harper-f1.png', 'harper-f2.png', 'harper-f3.png', 'harper-f4.png'],
   },
   {
     id: 'jaxon',
@@ -53,7 +52,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'bolt',
     portrait: 'jaxon.png',
-    surprisePortrait: 'jaxon-surprise.png',
+    celebrateFrames: ['jaxon-f1.png', 'jaxon-f2.png', 'jaxon-f3.png', 'jaxon-f4.png'],
   },
   {
     id: 'eloise',
@@ -63,7 +62,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'bow',
     portrait: 'eloise.png',
-    surprisePortrait: 'eloise-surprise.png',
+    celebrateFrames: ['eloise-f1.png', 'eloise-f2.png', 'eloise-f3.png', 'eloise-f4.png'],
   },
   {
     id: 'julia',
@@ -73,8 +72,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'curl',
     portrait: 'julia.png',
-    surprisePortrait: 'julia-surprise.png',
-    altPortrait: 'julia-glasses.png',
+    celebrateFrames: ['julia-f1.png', 'julia-f2.png', 'julia-f3.png', 'julia-f4.png'],
   },
 ]
 

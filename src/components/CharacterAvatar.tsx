@@ -20,26 +20,28 @@ export function CharacterAvatar({
   const character = characterFor(characterId, name)
   const radius = Math.round(size * 0.22)
   const idleSrc = character.portrait ? portraitUrl(character.portrait) : null
-  const surpriseSrc =
-    mood === 'surprise' && character.surprisePortrait
-      ? portraitUrl(character.surprisePortrait)
+  const celebrateFrames =
+    mood === 'surprise' && character.celebrateFrames?.length === 4
+      ? character.celebrateFrames
       : null
 
-  if (idleSrc && surpriseSrc) {
+  if (idleSrc && celebrateFrames) {
     const classes = ['avatar-pose', `pose-${character.id}`, 'character-avatar', className]
       .filter(Boolean)
       .join(' ')
-    const altSrc =
-      mood === 'surprise' && character.altPortrait
-        ? portraitUrl(character.altPortrait)
-        : null
     return (
       <span className={classes} style={{ width: size, height: size, borderRadius: radius }}>
         <img className="pose-idle" src={idleSrc} alt="" width={size} height={size} />
-        <img className="pose-surprise" src={surpriseSrc} alt="" width={size} height={size} />
-        {altSrc ? (
-          <img className="pose-alt" src={altSrc} alt="" width={size} height={size} />
-        ) : null}
+        {celebrateFrames.map((file, index) => (
+          <img
+            key={file}
+            className={`pose-frame pose-frame-${index + 1}`}
+            src={portraitUrl(file)}
+            alt=""
+            width={size}
+            height={size}
+          />
+        ))}
       </span>
     )
   }

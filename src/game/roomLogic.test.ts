@@ -404,12 +404,11 @@ assert(
   'hosts should be able to pick 12 rounds',
 )
 assert(
-  CHARACTERS.every((character) => Boolean(character.portrait && character.surprisePortrait)),
-  'every family face should have a celebrate pose',
-)
-assert(
-  CHARACTERS.find((character) => character.id === 'julia')?.altPortrait === 'julia-glasses.png',
-  'Julia should swap glasses colors',
+  CHARACTERS.every(
+    (character) =>
+      Boolean(character.portrait) && character.celebrateFrames?.length === 4,
+  ),
+  'every family face should have a 4-frame celebrate sequence',
 )
 
 const champRoom = {

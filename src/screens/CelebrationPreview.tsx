@@ -4,8 +4,8 @@ import { CHARACTERS } from '../game/characters'
 
 const LABELS: Record<string, string> = {
   seth: 'gasp',
-  emily: 'fire eyes',
-  harper: 'hair shake',
+  emily: 'fiery eyes',
+  harper: 'hair whip',
   jaxon: 'thumbs up',
   eloise: 'big smile',
   julia: 'glasses',
@@ -23,11 +23,6 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
     return () => document.body.classList.remove('preview-motion')
   }, [])
 
-  useEffect(() => {
-    const id = window.setInterval(() => setPlay((n) => n + 1), 2200)
-    return () => window.clearInterval(id)
-  }, [])
-
   return (
     <main className="screen celebration-preview">
       <header className="room-header">
@@ -35,10 +30,16 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           <p className="eyebrow">Preview</p>
           <h1>Celebrate poses</h1>
         </div>
-        <button className="btn ghost compact" type="button" onClick={onLeave}>
-          Back
-        </button>
+        <div className="celebration-actions">
+          <button className="btn compact" type="button" onClick={() => setPlay((n) => n + 1)}>
+            Replay
+          </button>
+          <button className="btn ghost compact" type="button" onClick={onLeave}>
+            Back
+          </button>
+        </div>
       </header>
+      <p className="lede">Four frames, once through. Replay to watch again.</p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">
