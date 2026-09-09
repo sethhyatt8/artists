@@ -75,6 +75,7 @@ export function GuessBurst({ guesses, players, turnKey }: GuessBurstProps) {
             name={burst.name}
             size={220}
             className="guess-burst-face"
+            mood="surprise"
           />
         </div>
         <p className="guess-burst-name">{burst.name}</p>

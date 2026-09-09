@@ -1,10 +1,13 @@
 import { characterFor, type Character, type CharacterLook } from '../game/characters'
 
+export type AvatarMood = 'idle' | 'surprise'
+
 type CharacterAvatarProps = {
   characterId?: string | null
   name?: string
   size?: number
   className?: string
+  mood?: AvatarMood
 }
 
 export function CharacterAvatar({
@@ -12,15 +15,31 @@ export function CharacterAvatar({
   name,
   size = 48,
   className,
+  mood = 'idle',
 }: CharacterAvatarProps) {
   const character = characterFor(characterId, name)
   const radius = Math.round(size * 0.22)
-  if (character.portrait) {
-    const src = `${import.meta.env.BASE_URL}avatars/${character.portrait}`
+  const idleSrc = character.portrait ? portraitUrl(character.portrait) : null
+  const surpriseSrc =
+    mood === 'surprise' && character.surprisePortrait
+      ? portraitUrl(character.surprisePortrait)
+      : null
+
+  if (idleSrc && surpriseSrc) {
+    const classes = ['avatar-pose', 'character-avatar', className].filter(Boolean).join(' ')
+    return (
+      <span className={classes} style={{ width: size, height: size, borderRadius: radius }}>
+        <img className="pose-idle" src={idleSrc} alt="" width={size} height={size} />
+        <img className="pose-surprise" src={surpriseSrc} alt="" width={size} height={size} />
+      </span>
+    )
+  }
+
+  if (idleSrc) {
     return (
       <img
         className={className ? `${className} character-avatar` : 'character-avatar'}
-        src={src}
+        src={idleSrc}
         alt=""
         width={size}
         height={size}
@@ -28,6 +47,7 @@ export function CharacterAvatar({
       />
     )
   }
+
   return (
     <svg
       className={className}
@@ -42,6 +62,10 @@ export function CharacterAvatar({
       <Portrait look={character.look} character={character} />
     </svg>
   )
+}
+
+function portraitUrl(file: string) {
+  return `${import.meta.env.BASE_URL}avatars/${file}`
 }
 
 function Portrait({ look, character }: { look: CharacterLook; character: Character }) {

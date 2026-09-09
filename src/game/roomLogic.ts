@@ -327,7 +327,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
       .filter((item) => (room.votes[item.id]?.length ?? 0) === 0)
       .map((item) => item.name),
     favorites: rankFavorites(room.collages, room.votes),
-    guessChampion: pickGuessChampion(room.guessTimes),
+    guessChampion: pickGuessChampion(room.guessTimes, room.players),
   }
 }
 
@@ -923,13 +923,19 @@ function rankFavorites(
     .map((collage, index) => ({ ...collage, place: index + 1 }))
 }
 
-function pickGuessChampion(guessTimes: Record<string, GuessClock>): GuessChampion | null {
+function pickGuessChampion(
+  guessTimes: Record<string, GuessClock>,
+  players: Record<string, Player>,
+): GuessChampion | null {
   let best: GuessChampion | null = null
-  for (const clock of Object.values(guessTimes)) {
+  for (const [playerId, clock] of Object.entries(guessTimes)) {
     if (!clock.times.length) continue
+    const player = players[playerId]
     const averageMs = clock.times.reduce((sum, time) => sum + time, 0) / clock.times.length
     const candidate: GuessChampion = {
+      playerId,
       name: clock.name,
+      characterId: player?.characterId,
       averageMs,
       correctCount: clock.times.length,
     }

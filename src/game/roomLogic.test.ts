@@ -398,6 +398,18 @@ assert(
   sanitizeGameSettings({ turnSeconds: 300 }).turnSeconds === 300,
   'hosts should be able to pick 5-minute rounds',
 )
+assert(
+  sanitizeGameSettings({ rounds: 12 }).rounds === 12,
+  'hosts should be able to pick 12 rounds',
+)
+
+const champRoom = {
+  ...emptyRoom(host, 'Ada', 'seth'),
+  guessTimes: { [host]: { name: 'Ada', times: [1800, 900] } },
+}
+const champView = toRoomState(champRoom, host, 'TEST')
+assert(champView.guessChampion?.characterId === 'seth', 'fastest guesser should keep their avatar')
+assert(champView.guessChampion?.name === 'Ada', 'fastest guesser should use tonight’s name')
 
 const sethRoom = emptyRoom(host, 'Captain', 'seth')
 assert(sethRoom.players[host]?.characterId === 'seth', 'host profile should join with a character')

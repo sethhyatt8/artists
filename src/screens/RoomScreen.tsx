@@ -827,11 +827,19 @@ function FinaleScreen({
       <section className="panel champion-card">
         <h2>Fastest guesser</h2>
         {champion ? (
-          <p>
-            <strong>{champion.name}</strong> averaged{' '}
-            {formatGuessMs(champion.averageMs)} on {champion.correctCount}{' '}
-            correct {champion.correctCount === 1 ? 'guess' : 'guesses'}.
-          </p>
+          <div className="champion-row">
+            <CharacterAvatar
+              characterId={champion.characterId}
+              name={champion.name}
+              size={88}
+              mood="surprise"
+            />
+            <p>
+              <strong>{champion.name}</strong> averaged{' '}
+              {formatGuessMs(champion.averageMs)} on {champion.correctCount}{' '}
+              correct {champion.correctCount === 1 ? 'guess' : 'guesses'}.
+            </p>
+          </div>
         ) : (
           <p>Nobody landed a correct guess this game.</p>
         )}

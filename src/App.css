@@ -364,6 +364,52 @@
   background: var(--bg-raise);
 }
 
+.avatar-pose {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.avatar-pose img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.avatar-pose .pose-idle {
+  animation: pose-idle-out 0.28s ease 0.08s forwards;
+}
+
+.avatar-pose .pose-surprise {
+  opacity: 0;
+  transform: scale(0.86);
+  animation: pose-surprise-in 0.34s cubic-bezier(0.2, 1.4, 0.36, 1) 0.1s forwards;
+}
+
+@keyframes pose-idle-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pose-surprise-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .character-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -833,6 +879,16 @@
   margin: 0;
 }
 
+.champion-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.champion-row p {
+  min-width: 0;
+}
+
 .guess-burst {
   position: fixed;
   inset: 0;
@@ -1064,6 +1120,17 @@
   .guess-burst-puppet,
   .guess-burst-spark {
     animation: burst-veil 0.9s ease both;
+  }
+
+  .avatar-pose .pose-idle {
+    animation: none;
+    opacity: 0;
+  }
+
+  .avatar-pose .pose-surprise {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
 

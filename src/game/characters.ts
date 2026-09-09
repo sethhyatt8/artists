@@ -10,6 +10,7 @@ export type Character = {
   ink: string
   look: CharacterLook
   portrait?: string
+  surprisePortrait?: string
 }
 
 export const CHARACTERS: Character[] = [
@@ -21,6 +22,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'cap',
     portrait: 'seth.png',
+    surprisePortrait: 'seth-surprise.png',
   },
   {
     id: 'emily',

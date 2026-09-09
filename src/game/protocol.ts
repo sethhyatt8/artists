@@ -7,7 +7,7 @@ export const ROOM_CODE_LENGTH = 4
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const MAX_GUESS_LENGTH = 48
 export const MIN_ROUNDS = 1
-export const MAX_ROUNDS = 10
+export const MAX_ROUNDS = 12
 export const MAX_VOTE_RANKS = MAX_ROUNDS
 export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180, 300] as const
 
@@ -77,7 +77,9 @@ export type RankedCollage = SavedCollage & {
 }
 
 export type GuessChampion = {
+  playerId: string
   name: string
+  characterId?: string
   averageMs: number
   correctCount: number
 }
