@@ -14,6 +14,20 @@ export function CharacterAvatar({
   className,
 }: CharacterAvatarProps) {
   const character = characterFor(characterId, name)
+  const radius = Math.round(size * 0.22)
+  if (character.portrait) {
+    const src = `${import.meta.env.BASE_URL}avatars/${character.portrait}`
+    return (
+      <img
+        className={className ? `${className} character-avatar` : 'character-avatar'}
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size, borderRadius: radius }}
+      />
+    )
+  }
   return (
     <svg
       className={className}

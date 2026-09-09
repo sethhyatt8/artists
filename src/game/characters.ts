@@ -9,6 +9,7 @@ export type Character = {
   paper: string
   ink: string
   look: CharacterLook
+  portrait?: string
 }
 
 export const CHARACTERS: Character[] = [
@@ -43,6 +44,7 @@ export const CHARACTERS: Character[] = [
     paper: '#c9d8ea',
     ink: '#1a1410',
     look: 'bolt',
+    portrait: 'jaxon.png',
   },
   {
     id: 'eloise',
