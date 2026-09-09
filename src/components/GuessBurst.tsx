@@ -4,7 +4,7 @@ import { characterFor } from '../game/characters'
 import type { Guess, Player } from '../game/protocol'
 import { CharacterAvatar } from './CharacterAvatar'
 
-const BURST_MS = 1400
+const BURST_MS = 1600
 
 type Burst = {
   id: string

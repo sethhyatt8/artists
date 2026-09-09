@@ -26,11 +26,20 @@ export function CharacterAvatar({
       : null
 
   if (idleSrc && surpriseSrc) {
-    const classes = ['avatar-pose', 'character-avatar', className].filter(Boolean).join(' ')
+    const classes = ['avatar-pose', `pose-${character.id}`, 'character-avatar', className]
+      .filter(Boolean)
+      .join(' ')
+    const altSrc =
+      mood === 'surprise' && character.altPortrait
+        ? portraitUrl(character.altPortrait)
+        : null
     return (
       <span className={classes} style={{ width: size, height: size, borderRadius: radius }}>
         <img className="pose-idle" src={idleSrc} alt="" width={size} height={size} />
         <img className="pose-surprise" src={surpriseSrc} alt="" width={size} height={size} />
+        {altSrc ? (
+          <img className="pose-alt" src={altSrc} alt="" width={size} height={size} />
+        ) : null}
       </span>
     )
   }

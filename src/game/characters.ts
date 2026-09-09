@@ -11,6 +11,7 @@ export type Character = {
   look: CharacterLook
   portrait?: string
   surprisePortrait?: string
+  altPortrait?: string
 }
 
 export const CHARACTERS: Character[] = [
@@ -32,6 +33,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'flower',
     portrait: 'emily.png',
+    surprisePortrait: 'emily-surprise.png',
   },
   {
     id: 'harper',
@@ -41,6 +43,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'star',
     portrait: 'harper.png',
+    surprisePortrait: 'harper-surprise.png',
   },
   {
     id: 'jaxon',
@@ -50,6 +53,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'bolt',
     portrait: 'jaxon.png',
+    surprisePortrait: 'jaxon-surprise.png',
   },
   {
     id: 'eloise',
@@ -59,6 +63,7 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'bow',
     portrait: 'eloise.png',
+    surprisePortrait: 'eloise-surprise.png',
   },
   {
     id: 'julia',
@@ -68,6 +73,8 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'curl',
     portrait: 'julia.png',
+    surprisePortrait: 'julia-surprise.png',
+    altPortrait: 'julia-glasses.png',
   },
 ]
 

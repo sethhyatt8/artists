@@ -1,3 +1,4 @@
+import { CHARACTERS } from './characters'
 import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
 import {
   CATEGORIES_PER_DEAL,
@@ -401,6 +402,14 @@ assert(
 assert(
   sanitizeGameSettings({ rounds: 12 }).rounds === 12,
   'hosts should be able to pick 12 rounds',
+)
+assert(
+  CHARACTERS.every((character) => Boolean(character.portrait && character.surprisePortrait)),
+  'every family face should have a celebrate pose',
+)
+assert(
+  CHARACTERS.find((character) => character.id === 'julia')?.altPortrait === 'julia-glasses.png',
+  'Julia should swap glasses colors',
 )
 
 const champRoom = {
