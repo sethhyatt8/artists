@@ -10,6 +10,7 @@ import {
   type Phase,
   type Player,
   type RankedCollage,
+  type RoomCue,
   type RoomState,
   type SavedCollage,
 } from './protocol'
@@ -55,6 +56,7 @@ export type StoredRoom = {
   guessTimes: Record<string, GuessClock>
   drawStartedMs: number | null
   usedPrompts: string[]
+  cue?: RoomCue | null
 }
 
 export function emptyRoom(
@@ -86,6 +88,7 @@ export function emptyRoom(
     guessTimes: {},
     drawStartedMs: null,
     usedPrompts: [],
+    cue: null,
   }
 }
 
@@ -122,6 +125,15 @@ function readCounter(value: unknown) {
     if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed))
   }
   return 0
+}
+
+function readCue(value: unknown): RoomCue | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const cue = value as Partial<RoomCue>
+  if (cue.kind !== 'no-spelling') return null
+  if (typeof cue.at !== 'number' || !Number.isFinite(cue.at)) return null
+  if (typeof cue.by !== 'string' || !cue.by) return null
+  return { kind: 'no-spelling', at: cue.at, by: cue.by }
 }
 
 function guessOrder(id: string) {
@@ -271,6 +283,7 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
     guessTimes: normalizeGuessTimes(value.guessTimes),
     drawStartedMs: typeof value.drawStartedMs === 'number' ? value.drawStartedMs : null,
     usedPrompts: asArray<string>(value.usedPrompts).filter((item) => typeof item === 'string'),
+    cue: readCue(value.cue),
   }
 }
 
@@ -328,6 +341,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
       .map((item) => item.name),
     favorites: rankFavorites(room.collages, room.votes),
     guessChampion: pickGuessChampion(room.guessTimes, room.players),
+    cue: room.cue ?? null,
   }
 }
 
@@ -579,6 +593,7 @@ const ROOM_KEYS: (keyof StoredRoom)[] = [
   'guessTimes',
   'drawStartedMs',
   'usedPrompts',
+  'cue',
 ]
 
 export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, unknown> {
@@ -714,6 +729,13 @@ export function applyMessage(
 
   if (message.type === 'canvas' && room.phase === 'drawing' && senderId === room.artistId) {
     return { ...room, pieces: message.pieces }
+  }
+
+  if (message.type === 'cue' && room.phase === 'drawing') {
+    return {
+      ...room,
+      cue: { kind: 'no-spelling', at: Date.now(), by: senderId },
+    }
   }
 
   if (message.type === 'guess' && room.phase === 'drawing' && senderId !== room.artistId) {
@@ -894,10 +916,11 @@ function allPlayersVoted(room: StoredRoom) {
 function sanitizeRanks(ranks: string[], collages: SavedCollage[]) {
   const ids = new Set(collages.map((item) => item.id))
   const unique: string[] = []
+  const limit = Math.min(MAX_VOTE_RANKS, collages.length)
   for (const id of ranks) {
     if (!ids.has(id) || unique.includes(id)) continue
     unique.push(id)
-    if (unique.length === collages.length) break
+    if (unique.length === limit) break
   }
   return unique
 }

@@ -1,14 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import type { RoomCue } from '../game/protocol'
 
 const CUE_MS = 1600
 
-export function LocalCues() {
-  const [cue, setCue] = useState<'no-spelling' | null>(null)
+export function LocalCues({
+  cue,
+  onCue,
+}: {
+  cue?: RoomCue | null
+  onCue: () => void
+}) {
+  const [visible, setVisible] = useState(false)
+  const seenAt = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!cue) return
-    const timer = window.setTimeout(() => setCue(null), CUE_MS)
+    if (!cue || cue.kind !== 'no-spelling') return
+    if (seenAt.current === cue.at) return
+    if (seenAt.current === null && Date.now() - cue.at > CUE_MS) {
+      seenAt.current = cue.at
+      return
+    }
+    seenAt.current = cue.at
+    setVisible(true)
+    const timer = window.setTimeout(() => setVisible(false), CUE_MS)
     return () => window.clearTimeout(timer)
   }, [cue])
 
@@ -18,16 +33,11 @@ export function LocalCues() {
   return (
     <>
       <div className="local-cues">
-        <p className="local-cues-label">This computer</p>
-        <button
-          className="btn compact local-cue-btn"
-          type="button"
-          onClick={() => setCue('no-spelling')}
-        >
+        <button className="btn compact local-cue-btn" type="button" onClick={onCue}>
           No spelling!!!!!
         </button>
       </div>
-      {cue === 'no-spelling' && typeof document !== 'undefined'
+      {visible && typeof document !== 'undefined'
         ? createPortal(
             <div className="local-cue-overlay" role="status" aria-live="assertive">
               <p className="local-cue-stamp">NO SPELLING!!!!!</p>

@@ -157,6 +157,18 @@ export function useGameRoom(session: RoomSession) {
       return
     }
 
+    if (message.type === 'cue') {
+      const room = latestRoom.current
+      if (!room) return
+      const next = applyMessage(room, id, message)
+      if ('error' in next) return
+      latestRoom.current = next
+      latestState.current = toRoomState(next, id, code)
+      setState(latestState.current)
+      if (next.cue) void rtdbSet(`${path}/cue`, next.cue)
+      return
+    }
+
     if (message.type === 'guess') {
       const room = latestRoom.current
       if (!room) return

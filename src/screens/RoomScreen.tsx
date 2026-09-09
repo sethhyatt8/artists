@@ -54,6 +54,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     onLeave()
   }
 
+  function fireNoSpelling() {
+    send({ type: 'cue', kind: 'no-spelling' })
+  }
+
   useEffect(() => {
     if (!copied) return
     const timer = window.setTimeout(() => setCopied(false), 1500)
@@ -177,7 +181,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking' && isArtist && state.options) {
     return (
       <main className="screen room pick">
-        <TurnHeader state={state} seconds={null} onLeave={leave} />
+        <TurnHeader state={state} seconds={null} onLeave={leave} onCue={fireNoSpelling} />
         <p className="lede">
           Pick one prompt. The {formatTurnLength(state.settings.turnSeconds)} timer
           starts as soon as you tap it.
@@ -208,7 +212,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'picking') {
     return (
       <main className="screen room">
-        <TurnHeader state={state} seconds={null} onLeave={leave} />
+        <TurnHeader state={state} seconds={null} onLeave={leave} onCue={fireNoSpelling} />
         <section className="panel">
           <h2>{state.artistName} is picking</h2>
           <p>The artist is choosing a prompt from a few categories. Get ready to guess.</p>
@@ -225,7 +229,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     ).size
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={seconds} onLeave={leave} prompt={state.prompt} />
+        <TurnHeader
+          state={state}
+          seconds={seconds}
+          onLeave={leave}
+          prompt={state.prompt}
+          onCue={fireNoSpelling}
+        />
         <p className="hint">
           Collage that prompt. Guessers can see your board live.
           {guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
@@ -257,6 +267,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           seconds={seconds}
           onLeave={leave}
           prompt={alreadyGotIt ? state.prompt : undefined}
+          onCue={fireNoSpelling}
         />
         <p className="hint">
           {alreadyGotIt
@@ -314,7 +325,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   if (state.phase === 'reveal') {
     return (
       <main className="screen practice">
-        <TurnHeader state={state} seconds={null} onLeave={leave} prompt={state.prompt} />
+        <TurnHeader
+          state={state}
+          seconds={null}
+          onLeave={leave}
+          prompt={state.prompt}
+          onCue={fireNoSpelling}
+        />
         <p className="lede">{revealLede(state, winnerName)}</p>
         <div className="practice-body guesser-body">
           <div className="canvas-stage">
@@ -527,11 +544,13 @@ function TurnHeader({
   seconds,
   onLeave,
   prompt,
+  onCue,
 }: {
   state: RoomState
   seconds: number | null
   onLeave: () => void
   prompt?: string | null
+  onCue: () => void
 }) {
   return (
     <header className="practice-header">
@@ -544,7 +563,7 @@ function TurnHeader({
         <h1>{prompt ?? (state.phase === 'drawing' ? 'Guess!' : 'Artists')}</h1>
       </div>
       <div className="turn-tools">
-        {state.phase === 'drawing' ? <LocalCues /> : null}
+        {state.phase === 'drawing' ? <LocalCues cue={state.cue} onCue={onCue} /> : null}
         {seconds !== null ? (
           <p className={seconds <= 10 ? 'timer urgent' : 'timer'}>{formatTime(seconds)}</p>
         ) : null}
@@ -737,7 +756,9 @@ function VoteScreen({
           ? waiting.length > 0
             ? `Vote in. Still waiting on ${waiting.join(', ')}.`
             : `Vote in. Waiting for everyone else (${state.votedCount} of ${state.voterCount}).`
-          : `Tap every drawing in order, favorite first. Rank all ${needed} so every collage gets a vote.`}
+          : `Pick your top ${needed}${
+              state.collages.length > needed ? ` of ${state.collages.length}` : ''
+            }, favorite first.`}
       </p>
       <div className="vote-actions">
         {alreadyVoted ? (
@@ -757,7 +778,7 @@ function VoteScreen({
               {chosen.length === 0
                 ? 'Tap your favorite collage to give it 1st.'
                 : canSubmit
-                  ? 'All drawings ranked. Lock in when you are happy with the order.'
+                  ? `Top ${needed} ranked. Lock in when you are happy with the order.`
                   : `${chosen.length} of ${needed} ranked. Tap the rest, or tap a ranked one to undo.`}
             </p>
             <button

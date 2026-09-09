@@ -8,7 +8,7 @@ export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const MAX_GUESS_LENGTH = 48
 export const MIN_ROUNDS = 1
 export const MAX_ROUNDS = 12
-export const MAX_VOTE_RANKS = MAX_ROUNDS
+export const MAX_VOTE_RANKS = 4
 export const TURN_SECONDS_OPTIONS = [60, 90, 120, 180, 300] as const
 
 export const SHAPE_SET = {
@@ -84,6 +84,12 @@ export type GuessChampion = {
   correctCount: number
 }
 
+export type RoomCue = {
+  kind: 'no-spelling'
+  at: number
+  by: string
+}
+
 export type RoomState = {
   roomCode: string
   phase: Phase
@@ -109,6 +115,7 @@ export type RoomState = {
   waitingVoters: string[]
   favorites: RankedCollage[]
   guessChampion: GuessChampion | null
+  cue: RoomCue | null
 }
 
 export type ClientMessage =
@@ -122,6 +129,7 @@ export type ClientMessage =
   | { type: 'vote'; ranks: string[] }
   | { type: 'closeVote' }
   | { type: 'backToLobby' }
+  | { type: 'cue'; kind: 'no-spelling' }
 
 export type ServerMessage =
   | { type: 'state'; state: RoomState }
@@ -186,6 +194,9 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
         pieces.push(item)
       }
       return { type: 'canvas', pieces }
+    }
+    if (parsed.type === 'cue' && parsed.kind === 'no-spelling') {
+      return { type: 'cue', kind: 'no-spelling' }
     }
     return null
   } catch {

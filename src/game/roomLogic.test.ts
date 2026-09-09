@@ -60,6 +60,18 @@ const hostDuringDraw = toRoomState(room, host, 'TEST')
 assert(hostDuringDraw.prompt === 'pizza', 'artist should see the prompt while drawing')
 assert(hostDuringDraw.phase === 'drawing', 'artist should collage after picking')
 
+const cued = unwrap(applyMessage(room, guest, { type: 'cue', kind: 'no-spelling' }))
+assert(cued.cue?.kind === 'no-spelling', 'no-spelling cue should stamp the room')
+assert(cued.cue?.by === guest, 'cue should remember who sent it')
+const artistCueView = toRoomState(cued, host, 'TEST')
+assert(artistCueView.cue?.kind === 'no-spelling', 'artist should see the shared stamp')
+const guesserCueView = toRoomState(cued, guest, 'TEST')
+assert(guesserCueView.cue?.kind === 'no-spelling', 'guessers should see the shared stamp')
+const storedCue = normalizeStoredRoom(toFirebaseRoom(cued))
+assert(storedCue?.cue?.kind === 'no-spelling', 'cue must survive a Firebase round-trip')
+const ignoredCue = unwrap(applyMessage({ ...room, phase: 'reveal' }, guest, { type: 'cue', kind: 'no-spelling' }))
+assert(!ignoredCue.cue, 'the stamp should only fire during collage')
+
 const ignoredTimesUp = unwrap(applyMessage(room, guest, { type: 'timesUp' }))
 assert(ignoredTimesUp.phase === 'drawing', 'timesUp must not skip a turn that still has time')
 assert(ignoredTimesUp.prompt === 'pizza', 'early timesUp must leave the prompt in place')
@@ -624,7 +636,7 @@ allRankVote = unwrap(
 )
 assert(
   !allRankVote.votes[host],
-  'a partial ranking should not count until every collage is ranked',
+  'a partial ranking should not count until the top 4 are ranked',
 )
 allRankVote = unwrap(
   applyMessage(allRankVote, host, {
@@ -634,7 +646,7 @@ allRankVote = unwrap(
 )
 assert(
   allRankVote.votes[host]?.join(',') === 'c-1,c-2,c-3,c-4',
-  'players should be able to rank every drawing',
+  'players should be able to rank four drawings',
 )
 const allRankView = toRoomState(allRankVote, host, 'TEST')
 assert(
@@ -644,6 +656,56 @@ assert(
 assert(
   allRankView.favorites.length === 4,
   `finale should keep every collage, got ${allRankView.favorites.length}`,
+)
+
+const sixCollages = [
+  ...fourCollages,
+  {
+    id: 'c-5',
+    round: 5,
+    artistId: host,
+    artistName: 'Ada',
+    prompt: 'star',
+    pieces: [],
+  },
+  {
+    id: 'c-6',
+    round: 6,
+    artistId: guest,
+    artistName: 'Bob',
+    prompt: 'fish',
+    pieces: [],
+  },
+]
+let topFourVote = {
+  ...allRankVote,
+  phase: 'voting' as const,
+  collages: sixCollages,
+  votes: {},
+}
+topFourVote = unwrap(
+  applyMessage(topFourVote, host, { type: 'vote', ranks: ['c-1', 'c-2', 'c-3'] }),
+)
+assert(!topFourVote.votes[host], 'ranking 3 of 6 drawings should not count')
+topFourVote = unwrap(
+  applyMessage(topFourVote, host, {
+    type: 'vote',
+    ranks: ['c-1', 'c-2', 'c-3', 'c-4'],
+  }),
+)
+assert(
+  topFourVote.votes[host]?.join(',') === 'c-1,c-2,c-3,c-4',
+  'top 4 should be enough even when there are more drawings',
+)
+const extraRanks = unwrap(
+  applyMessage(topFourVote, guest, {
+    type: 'vote',
+    ranks: ['c-6', 'c-5', 'c-4', 'c-3', 'c-2', 'c-1'],
+  }),
+)
+assert(
+  extraRanks.votes[guest]?.join(',') === 'c-6,c-5,c-4,c-3',
+  'ballots should keep only the top 4 ranks',
 )
 
 console.log('roomLogic tests passed')
