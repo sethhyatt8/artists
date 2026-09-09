@@ -10,7 +10,7 @@ export function PracticeScreen({ onLeave }: PracticeScreenProps) {
   const [pieces, setPieces] = useState<CollagePiece[]>([])
 
   return (
-    <main className="screen practice">
+    <main className="screen practice artist-screen">
       <header className="practice-header">
         <div>
           <p className="eyebrow">Solo</p>

@@ -207,7 +207,7 @@ export function CollageStudio({
   }
 
   return (
-    <div className="practice-body">
+    <div className="practice-body artist-body">
       <aside className="sidebar sidebar-left">
         {showRegular ? (
           <>
@@ -285,66 +285,68 @@ export function CollageStudio({
       </div>
 
       <aside className="sidebar sidebar-right">
-        {extraRight}
-        {hint ? <p className="sidebar-hint">{hint}</p> : null}
-        <p className="drawer-label">Color</p>
-        <div className="palette-row">
-          {PALETTE.map((swatch) => (
-            <button
-              key={swatch}
-              className={swatch === color ? 'swatch active' : 'swatch'}
-              type="button"
-              disabled={locked}
-              aria-label={`Color ${swatch}`}
-              style={{ background: swatch }}
-              onClick={() => applyColor(swatch)}
-            />
-          ))}
-        </div>
+        <div className="studio-tools">
+          <p className="drawer-label">Color</p>
+          <div className="palette-row">
+            {PALETTE.map((swatch) => (
+              <button
+                key={swatch}
+                className={swatch === color ? 'swatch active' : 'swatch'}
+                type="button"
+                disabled={locked}
+                aria-label={`Color ${swatch}`}
+                style={{ background: swatch }}
+                onClick={() => applyColor(swatch)}
+              />
+            ))}
+          </div>
 
-        <p className="drawer-label">Edit</p>
-        <div className="transform-row">
-          <button
-            className="btn ghost compact"
-            type="button"
-            disabled={!selected}
-            onClick={() => rotateSelected(-15)}
-          >
-            Rotate left
-          </button>
-          <button
-            className="btn ghost compact"
-            type="button"
-            disabled={!selected}
-            onClick={() => rotateSelected(15)}
-          >
-            Rotate right
-          </button>
-          <button
-            className="btn ghost compact"
-            type="button"
-            disabled={!selected}
-            onClick={() => scaleSelected(0.85)}
-          >
-            Smaller
-          </button>
-          <button
-            className="btn ghost compact"
-            type="button"
-            disabled={!selected}
-            onClick={() => scaleSelected(1.15)}
-          >
-            Bigger
-          </button>
-          <button
-            className="btn ghost compact"
-            type="button"
-            disabled={!selected}
-            onClick={deleteSelected}
-          >
-            Delete
-          </button>
+          <p className="drawer-label">Edit</p>
+          <div className="transform-row">
+            <button
+              className="btn ghost compact"
+              type="button"
+              disabled={!selected}
+              onClick={() => rotateSelected(-15)}
+            >
+              Rotate left
+            </button>
+            <button
+              className="btn ghost compact"
+              type="button"
+              disabled={!selected}
+              onClick={() => rotateSelected(15)}
+            >
+              Rotate right
+            </button>
+            <button
+              className="btn ghost compact"
+              type="button"
+              disabled={!selected}
+              onClick={() => scaleSelected(0.85)}
+            >
+              Smaller
+            </button>
+            <button
+              className="btn ghost compact"
+              type="button"
+              disabled={!selected}
+              onClick={() => scaleSelected(1.15)}
+            >
+              Bigger
+            </button>
+            <button
+              className="btn ghost compact"
+              type="button"
+              disabled={!selected}
+              onClick={deleteSelected}
+            >
+              Delete
+            </button>
+          </div>
         </div>
+        {hint ? <p className="sidebar-hint">{hint}</p> : null}
+        {extraRight}
       </aside>
     </div>
   )

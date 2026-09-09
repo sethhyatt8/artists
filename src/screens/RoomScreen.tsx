@@ -265,7 +265,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
     ).size
     return (
-      <main className="screen practice">
+      <main className="screen practice artist-screen">
         <TurnHeader
           state={state}
           seconds={seconds}
@@ -904,9 +904,8 @@ function FinaleScreen({
               mood="surprise"
             />
             <p>
-              <strong>{champion.name}</strong> averaged{' '}
-              {formatGuessMs(champion.averageMs)} on {champion.correctCount}{' '}
-              correct {champion.correctCount === 1 ? 'guess' : 'guesses'}.
+              <strong>{champion.name}</strong> got {champion.correctCount} right,
+              averaging {formatGuessMs(champion.averageMs)}.
             </p>
           </div>
         ) : (

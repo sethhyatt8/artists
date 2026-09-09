@@ -438,6 +438,31 @@ const champView = toRoomState(champRoom, host, 'TEST')
 assert(champView.guessChampion?.characterId === 'seth', 'fastest guesser should keep their avatar')
 assert(champView.guessChampion?.name === 'Ada', 'fastest guesser should use tonight’s name')
 
+const champGuest = addPlayer(emptyRoom(host, 'Ada', 'seth'), guest, 'Bob', 'emily')
+assert(typeof champGuest !== 'string', 'champion guest should join')
+const moreCorrect = {
+  ...champGuest,
+  guessTimes: {
+    [host]: { name: 'Ada', times: [400] },
+    [guest]: { name: 'Bob', times: [3000, 2800] },
+  },
+}
+assert(
+  toRoomState(moreCorrect, host, 'TEST').guessChampion?.name === 'Bob',
+  'more correct guesses should beat a faster single guess',
+)
+const sameCountFaster = {
+  ...champGuest,
+  guessTimes: {
+    [host]: { name: 'Ada', times: [800, 900] },
+    [guest]: { name: 'Bob', times: [2000, 2100] },
+  },
+}
+assert(
+  toRoomState(sameCountFaster, host, 'TEST').guessChampion?.name === 'Ada',
+  'tied correct counts should still prefer the faster average',
+)
+
 const sethRoom = emptyRoom(host, 'Captain', 'seth')
 assert(sethRoom.players[host]?.characterId === 'seth', 'host profile should join with a character')
 assert(sethRoom.players[host]?.name === 'Captain', 'tonight’s name can differ from the character')

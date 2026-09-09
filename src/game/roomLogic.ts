@@ -964,8 +964,8 @@ function pickGuessChampion(
     }
     if (
       !best ||
-      candidate.averageMs < best.averageMs ||
-      (candidate.averageMs === best.averageMs && candidate.correctCount > best.correctCount)
+      candidate.correctCount > best.correctCount ||
+      (candidate.correctCount === best.correctCount && candidate.averageMs < best.averageMs)
     ) {
       best = candidate
     }
