@@ -301,19 +301,15 @@
 }
 
 .local-cue-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 6;
+  z-index: 90;
   display: grid;
   place-items: center;
   pointer-events: none;
+  opacity: 1;
   background: radial-gradient(circle at center, rgba(26, 20, 16, 0.28), transparent 72%);
   animation: local-cue-veil 1.6s ease both;
-}
-
-body > .local-cue-overlay {
-  position: fixed;
-  z-index: 90;
 }
 
 .local-cue-stamp {
@@ -1188,7 +1184,9 @@ body > .local-cue-overlay {
 
   .local-cue-overlay,
   .local-cue-stamp {
-    animation: local-cue-veil 1.6s ease both;
+    animation: none;
+    opacity: 1;
+    transform: rotate(-7deg) scale(1);
   }
 }
 

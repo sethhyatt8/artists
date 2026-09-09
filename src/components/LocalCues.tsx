@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { RoomCue } from '../game/protocol'
 
@@ -12,28 +12,26 @@ export function LocalCues({
   onCue: () => void
 }) {
   const [visible, setVisible] = useState(false)
-  const seenAt = useRef<number | null>(null)
 
   useEffect(() => {
     if (!cue || cue.kind !== 'no-spelling') return
-    if (seenAt.current === cue.at) return
-    if (seenAt.current === null && Date.now() - cue.at > CUE_MS) {
-      seenAt.current = cue.at
-      return
-    }
-    seenAt.current = cue.at
+    const age = Date.now() - cue.at
+    if (age > 5000) return
     setVisible(true)
     const timer = window.setTimeout(() => setVisible(false), CUE_MS)
     return () => window.clearTimeout(timer)
-  }, [cue])
+  }, [cue?.at, cue?.kind])
 
-  const stage =
-    typeof document === 'undefined' ? null : document.querySelector('.canvas-stage')
+  function fire() {
+    setVisible(true)
+    window.setTimeout(() => setVisible(false), CUE_MS)
+    onCue()
+  }
 
   return (
     <>
       <div className="local-cues">
-        <button className="btn compact local-cue-btn" type="button" onClick={onCue}>
+        <button className="btn compact local-cue-btn" type="button" onClick={fire}>
           No spelling!!!!!
         </button>
       </div>
@@ -42,7 +40,7 @@ export function LocalCues({
             <div className="local-cue-overlay" role="status" aria-live="assertive">
               <p className="local-cue-stamp">NO SPELLING!!!!!</p>
             </div>,
-            stage ?? document.body,
+            document.body,
           )
         : null}
     </>
