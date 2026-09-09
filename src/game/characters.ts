@@ -10,7 +10,14 @@ export type Character = {
   ink: string
   look: CharacterLook
   portrait?: string
-  celebrateFrames?: [string, string, string, string]
+  celebrateFrames?: string[]
+}
+
+export const CELEBRATE_FRAME_MS = 240
+
+export function celebrateDurationMs(frameCount: number) {
+  if (frameCount <= 0) return 900
+  return frameCount * CELEBRATE_FRAME_MS + 280
 }
 
 export const CHARACTERS: Character[] = [
@@ -72,7 +79,14 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'curl',
     portrait: 'julia.png',
-    celebrateFrames: ['julia-f1.png', 'julia-f2.png', 'julia-f3.png', 'julia-f4.png'],
+    celebrateFrames: [
+      'julia-f1.png',
+      'julia-f2.png',
+      'julia-f3.png',
+      'julia-f4.png',
+      'julia-f5.png',
+      'julia-f6.png',
+    ],
   },
 ]
 

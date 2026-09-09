@@ -8,7 +8,7 @@ const LABELS: Record<string, string> = {
   harper: 'hair whip',
   jaxon: 'thumbs up',
   eloise: 'big smile',
-  julia: 'glasses',
+  julia: 'glasses pulse',
 }
 
 type CelebrationPreviewProps = {
@@ -39,7 +39,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           </button>
         </div>
       </header>
-      <p className="lede">Four frames, once through. Replay to watch again.</p>
+      <p className="lede">Play once. Replay to watch again.</p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">

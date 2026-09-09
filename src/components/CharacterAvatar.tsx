@@ -1,4 +1,10 @@
-import { characterFor, type Character, type CharacterLook } from '../game/characters'
+import { useEffect, useState } from 'react'
+import {
+  CELEBRATE_FRAME_MS,
+  characterFor,
+  type Character,
+  type CharacterLook,
+} from '../game/characters'
 
 export type AvatarMood = 'idle' | 'surprise'
 
@@ -21,9 +27,36 @@ export function CharacterAvatar({
   const radius = Math.round(size * 0.22)
   const idleSrc = character.portrait ? portraitUrl(character.portrait) : null
   const celebrateFrames =
-    mood === 'surprise' && character.celebrateFrames?.length === 4
+    mood === 'surprise' && character.celebrateFrames && character.celebrateFrames.length >= 4
       ? character.celebrateFrames
       : null
+  const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    if (!celebrateFrames?.length) {
+      setFrame(0)
+      return
+    }
+    const allowMotion =
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      document.body.classList.contains('preview-motion')
+    if (!allowMotion) {
+      setFrame(celebrateFrames.length - 1)
+      return
+    }
+    setFrame(0)
+    let index = 0
+    const timer = window.setInterval(() => {
+      index += 1
+      if (index >= celebrateFrames.length - 1) {
+        setFrame(celebrateFrames.length - 1)
+        window.clearInterval(timer)
+      } else {
+        setFrame(index)
+      }
+    }, CELEBRATE_FRAME_MS)
+    return () => window.clearInterval(timer)
+  }, [celebrateFrames, character.id])
 
   if (idleSrc && celebrateFrames) {
     const classes = ['avatar-pose', `pose-${character.id}`, 'character-avatar', className]
@@ -35,7 +68,13 @@ export function CharacterAvatar({
         {celebrateFrames.map((file, index) => (
           <img
             key={file}
-            className={`pose-frame pose-frame-${index + 1}`}
+            className={[
+              'pose-frame',
+              index === frame ? 'is-on' : '',
+              character.id === 'emily' && index >= 1 ? 'pose-fire' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             src={portraitUrl(file)}
             alt=""
             width={size}

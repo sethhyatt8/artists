@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { characterFor } from '../game/characters'
+import { celebrateDurationMs, characterFor } from '../game/characters'
 import type { Guess, Player } from '../game/protocol'
 import { CharacterAvatar } from './CharacterAvatar'
-
-const BURST_MS = 1400
 
 type Burst = {
   id: string
@@ -51,9 +49,10 @@ export function GuessBurst({ guesses, players, turnKey }: GuessBurstProps) {
 
   useEffect(() => {
     if (!burst) return
+    const frames = characterFor(burst.characterId, burst.name).celebrateFrames?.length ?? 0
     const timer = window.setTimeout(() => {
       setBurst(queue.current.shift() ?? null)
-    }, BURST_MS)
+    }, celebrateDurationMs(frames))
     return () => window.clearTimeout(timer)
   }, [burst])
 

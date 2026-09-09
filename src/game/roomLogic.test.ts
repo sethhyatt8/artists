@@ -405,10 +405,13 @@ assert(
 )
 assert(
   CHARACTERS.every(
-    (character) =>
-      Boolean(character.portrait) && character.celebrateFrames?.length === 4,
+    (character) => Boolean(character.portrait) && (character.celebrateFrames?.length ?? 0) >= 4,
   ),
-  'every family face should have a 4-frame celebrate sequence',
+  'every family face should have a celebrate sequence',
+)
+assert(
+  (CHARACTERS.find((character) => character.id === 'julia')?.celebrateFrames?.length ?? 0) >= 6,
+  'Julia’s glasses should pulse across extra frames',
 )
 
 const champRoom = {
