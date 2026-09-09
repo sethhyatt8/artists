@@ -68,13 +68,7 @@ export function CharacterAvatar({
         {celebrateFrames.map((file, index) => (
           <img
             key={file}
-            className={[
-              'pose-frame',
-              index === frame ? 'is-on' : '',
-              character.id === 'emily' && index >= 1 ? 'pose-fire' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={index === frame ? 'pose-frame is-on' : 'pose-frame'}
             src={portraitUrl(file)}
             alt=""
             width={size}
