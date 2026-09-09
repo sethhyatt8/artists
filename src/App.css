@@ -303,13 +303,13 @@
 .local-cue-overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 1000;
   display: grid;
   place-items: center;
   pointer-events: none;
   opacity: 1;
   background: radial-gradient(circle at center, rgba(26, 20, 16, 0.28), transparent 72%);
-  animation: local-cue-veil 1.6s ease both;
+  animation: local-cue-veil 2.2s ease both;
 }
 
 .local-cue-stamp {
@@ -324,14 +324,13 @@
     3px 3px 0 #1a1410,
     -1px -1px 0 #f4e6d3;
   transform: rotate(-7deg);
-  animation: local-cue-stamp 1.6s cubic-bezier(0.15, 1.4, 0.32, 1) both;
+  animation: local-cue-stamp 2.2s cubic-bezier(0.15, 1.4, 0.32, 1) both;
 }
 
 @keyframes local-cue-veil {
   0% { opacity: 0; }
   12% { opacity: 1; }
-  72% { opacity: 1; }
-  100% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 @keyframes local-cue-stamp {
@@ -346,13 +345,9 @@
   32% {
     transform: rotate(-7deg) scale(1.04);
   }
-  70% {
+  100% {
     opacity: 1;
     transform: rotate(-7deg) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(-7deg) scale(1.06);
   }
 }
 

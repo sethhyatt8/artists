@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { RoomCue } from '../game/protocol'
 
-const CUE_MS = 1600
+const CUE_MS = 2200
 
 export function LocalCues({
   cue,
