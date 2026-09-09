@@ -46,7 +46,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
             <CharacterAvatar
               characterId={character.id}
               name={character.name}
-              size={168}
+              size={200}
               mood="surprise"
             />
             <figcaption>

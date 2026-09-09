@@ -188,6 +188,10 @@ assert(maskSecret('Spider-Man') === '******-***', 'mask should keep punctuation'
 assert(maskSecret('pizza') === '*****', 'mask should cover letters')
 
 assert(answersMatch('pizza', 'pizza'), 'exact guesses should count')
+assert(answersMatch('spiderman', 'Spider-Man'), 'hyphenated names should count without the hyphen')
+assert(answersMatch('spider man', 'Spider-Man'), 'spaces in a hyphenated name should count')
+assert(answersMatch('SpiderMan', 'Spider-Man'), 'mixed case without a hyphen should count')
+assert(!answersMatch('spider', 'Spider-Man'), 'one half of a hyphenated name must not count')
 assert(answersMatch('brushing teeth', 'brushing teeth'), 'the full prompt should count')
 assert(answersMatch('brush teeth', 'brushing teeth'), 'close wording of the full idea should count')
 assert(!answersMatch('teeth', 'brushing teeth'), 'one leftover word must not count')

@@ -300,6 +300,13 @@
   gap: 8px;
 }
 
+.prompt-choices .btn {
+  width: 100%;
+  text-align: left;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
 .guess-feed {
   display: flex;
   flex-direction: column;
@@ -474,7 +481,7 @@
 }
 
 .screen.room.pick {
-  width: min(960px, 100%);
+  width: min(1100px, 100%);
 }
 
 .screen.room.pick h1 {
@@ -495,7 +502,7 @@
 @media (min-width: 720px) {
   .pick-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     align-items: start;
   }
 }
@@ -692,7 +699,7 @@
   }
 
   .guesser-body {
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
 
   .sidebar {
@@ -896,13 +903,16 @@
   border-radius: 32%;
   background: #d8c4a8;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  transform: none;
+  overflow: hidden;
 }
 
 .guess-burst-face,
 .guess-burst-puppet .character-avatar {
-  width: min(46vw, 220px) !important;
-  height: min(46vw, 220px) !important;
+  width: min(72vw, 280px) !important;
+  height: min(72vw, 280px) !important;
   border-radius: 28% !important;
+  transform: none;
 }
 
 .guess-burst-name {
@@ -1014,10 +1024,10 @@
 }
 
 @keyframes burst-card {
-  0% { opacity: 0; transform: scale(0.86); }
-  16% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; }
+  16% { opacity: 1; }
   80% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.04); }
+  100% { opacity: 0; }
 }
 
 @keyframes burst-hop {

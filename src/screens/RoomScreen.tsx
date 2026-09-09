@@ -831,7 +831,7 @@ function FinaleScreen({
             <CharacterAvatar
               characterId={champion.characterId}
               name={champion.name}
-              size={88}
+              size={108}
               mood="surprise"
             />
             <p>

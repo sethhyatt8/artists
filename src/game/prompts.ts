@@ -592,6 +592,10 @@ export function normalizeAnswer(value: string) {
     .trim()
 }
 
+function compactAnswer(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 export function mergeUsedPrompts(existing: string[], extra: string[]) {
   const seen = new Set(existing.map(normalizeAnswer))
   const next = [...existing]
@@ -633,6 +637,7 @@ export function answersMatch(guess: string, prompt: string) {
   const promptNorm = normalizeAnswer(prompt)
   if (!guessNorm || !promptNorm) return false
   if (guessNorm === promptNorm) return true
+  if (compactAnswer(guess) === compactAnswer(prompt)) return true
 
   const guessWords = contentWords(guess)
   const promptWords = contentWords(prompt)

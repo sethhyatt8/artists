@@ -72,7 +72,7 @@ export function GuessBurst({ guesses, players, turnKey }: GuessBurstProps) {
           <CharacterAvatar
             characterId={burst.characterId}
             name={burst.name}
-            size={220}
+            size={280}
             className="guess-burst-face"
             mood="surprise"
           />
