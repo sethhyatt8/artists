@@ -299,7 +299,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
     ).size
     return (
-      <main className="screen practice">
+      <main className="screen practice guesser-screen">
         <TurnHeader
           state={state}
           seconds={seconds}
@@ -345,6 +345,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
+                    enterKeyHint="send"
+                    inputMode="text"
                     name="artists-guess"
                     placeholder="Type a guess"
                     onChange={(event) => setGuessText(event.target.value)}
