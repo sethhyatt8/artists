@@ -298,6 +298,7 @@
   border-color: var(--ember);
   color: var(--ember);
   background: var(--ember-dim);
+  touch-action: manipulation;
 }
 
 .local-cue-overlay {
@@ -308,15 +309,17 @@
   place-items: center;
   pointer-events: none;
   opacity: 1;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   background: radial-gradient(circle at center, rgba(26, 20, 16, 0.28), transparent 72%);
   animation: local-cue-veil 2.2s ease both;
 }
 
 .local-cue-stamp {
   margin: 0;
-  max-width: 92%;
+  max-width: min(92%, 14ch);
   font-family: var(--display);
-  font-size: clamp(36px, 11vw, 108px);
+  font-size: clamp(48px, 18vw, 108px);
   line-height: 0.88;
   text-align: center;
   color: #d4483a;
@@ -1235,5 +1238,25 @@
 @media (max-width: 720px) {
   .celebration-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .practice-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .turn-tools {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .local-cue-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .timer {
+    font-size: 28px;
   }
 }
