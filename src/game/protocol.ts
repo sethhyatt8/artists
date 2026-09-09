@@ -59,6 +59,7 @@ export type Guess = {
   text: string
   correct: boolean
   seq?: number
+  elapsedMs?: number
 }
 
 export type SavedCollage = {
@@ -243,7 +244,8 @@ function isGuess(value: unknown): value is Guess {
     typeof value.name === 'string' &&
     typeof value.text === 'string' &&
     typeof value.correct === 'boolean' &&
-    (value.seq === undefined || typeof value.seq === 'number')
+    (value.seq === undefined || typeof value.seq === 'number') &&
+    (value.elapsedMs === undefined || typeof value.elapsedMs === 'number')
   )
 }
 

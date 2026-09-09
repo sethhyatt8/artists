@@ -20,8 +20,9 @@ import {
   type ShapeSet,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
-import { turnRemainingSeconds } from '../game/roomLogic'
+import { formatGuessMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
 import { CharacterAvatar } from '../components/CharacterAvatar'
+import { GuessBurst } from '../components/GuessBurst'
 
 type RoomScreenProps = {
   session: RoomSession
@@ -142,7 +143,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     setGuessText('')
   }
 
-  if (error && !state) {
+  const phaseScreen = (() => {
+    if (error && !state) {
     return (
       <main className="screen">
         <h1>Couldn’t join</h1>
@@ -324,6 +326,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             />
           </div>
           <aside className="sidebar sidebar-right">
+            <TurnSolveSummary state={state} />
             <GuessFeed guesses={state.guesses} players={state.players} />
             <ScoreList players={state.players} connectionId={connectionId} />
             {state.round < state.settings.rounds ? (
@@ -430,6 +433,18 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         Leave room
       </button>
     </main>
+  )
+  })()
+
+  return (
+    <>
+      <GuessBurst
+        guesses={state?.guesses ?? []}
+        players={state?.players ?? []}
+        turnKey={`${state?.round ?? 0}:${state?.artistId ?? ''}`}
+      />
+      {phaseScreen}
+    </>
   )
 }
 
@@ -551,6 +566,47 @@ function revealLede(state: RoomState, winnerName: string | null) {
   }
   if (winnerName) return `${winnerName} got it!`
   return 'Time’s up — nobody guessed it.'
+}
+
+function TurnSolveSummary({ state }: { state: RoomState }) {
+  const rows = turnSolveRows(state.players, state.artistId, state.guesses)
+  const first = rows.find((row) => row.place === 1)
+  if (!first) return null
+  return (
+    <section className="solve-summary">
+      <div className="solve-hero">
+        <CharacterAvatar
+          characterId={first.characterId}
+          name={first.name}
+          size={88}
+        />
+        <div>
+          <p className="eyebrow">First guess</p>
+          <h2>{first.name}</h2>
+          <p className="solve-hero-time">
+            {first.elapsedMs != null ? formatGuessMs(first.elapsedMs) : 'Got it'}
+          </p>
+        </div>
+      </div>
+      <ol className="solve-times">
+        {rows.map((row) => (
+          <li key={row.playerId} className={row.place === 1 ? 'first' : undefined}>
+            <span className="player-name">
+              <CharacterAvatar
+                characterId={row.characterId}
+                name={row.name}
+                size={28}
+              />
+              {row.name}
+            </span>
+            <span className="solve-time">
+              {row.elapsedMs != null ? formatGuessMs(row.elapsedMs) : '—'}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
 }
 
 function GuessFeed({
@@ -773,7 +829,7 @@ function FinaleScreen({
         {champion ? (
           <p>
             <strong>{champion.name}</strong> averaged{' '}
-            {formatAverageMs(champion.averageMs)} on {champion.correctCount}{' '}
+            {formatGuessMs(champion.averageMs)} on {champion.correctCount}{' '}
             correct {champion.correctCount === 1 ? 'guess' : 'guesses'}.
           </p>
         ) : (
@@ -884,14 +940,6 @@ function placeLabel(place: number) {
   if (place === 2) return '2nd'
   if (place === 3) return '3rd'
   return `${place}th`
-}
-
-function formatAverageMs(ms: number) {
-  const seconds = ms / 1000
-  if (seconds < 60) return `${seconds.toFixed(1)}s`
-  const mins = Math.floor(seconds / 60)
-  const rest = seconds - mins * 60
-  return `${mins}m ${rest.toFixed(1)}s`
 }
 
 function nextArtistName(state: RoomState) {

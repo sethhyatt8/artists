@@ -18,6 +18,7 @@ import {
   toFirebaseRoom,
   toRoomState,
   turnRemainingSeconds,
+  turnSolveRows,
   type StoredRoom,
 } from './roomLogic'
 
@@ -217,6 +218,12 @@ multi = unwrap(applyMessage(multi, guest, { type: 'guess', text: 'pizza' }))
 assert(multi.phase === 'drawing', 'first correct guess must not end a 3-player turn')
 assert(multi.winnerName === null, 'winner is not set until the turn ends')
 assert(multi.guessTimes[guest]?.times.length === 1, 'first solver should record a guess time')
+const bobSolve = multi.guesses.find((guess) => guess.playerId === guest)
+assert(bobSolve?.correct, 'Bob should be marked correct')
+assert(
+  typeof bobSolve?.elapsedMs === 'number' && bobSolve.elapsedMs >= 14_000 && bobSolve.elapsedMs < 20_000,
+  `Bob's solve time should be ~15s, got ${bobSolve?.elapsedMs}`,
+)
 
 const skippedNext = unwrap(applyMessage(multi, host, { type: 'nextTurn' }))
 assert(skippedNext.phase === 'drawing', 'nextTurn must wait until reveal')
@@ -256,11 +263,28 @@ const partialTimeUp = unwrap(
 )
 assert(partialTimeUp.phase === 'reveal', 'time up should reveal even if only some guessers got it')
 assert(partialTimeUp.winnerName === 'Bob', `expected Bob after time up, got ${partialTimeUp.winnerName}`)
+const timedRows = turnSolveRows(
+  Object.values(partialTimeUp.players),
+  partialTimeUp.artistId,
+  partialTimeUp.guesses,
+)
+assert(timedRows[0]?.playerId === guest && timedRows[0].place === 1, 'Bob should be featured first')
+assert(timedRows[1]?.playerId === cam && timedRows[1].elapsedMs === null, 'Cam should show as unfinished')
 
 multi = unwrap(applyMessage(multi, cam, { type: 'guess', text: 'pizza' }))
 assert(multi.phase === 'reveal', 'the turn ends when every guesser is correct')
 assert(multi.winnerName === 'Bob and Cam', `expected Bob and Cam, got ${multi.winnerName}`)
 assert(multi.guessTimes[cam]?.times.length === 1, 'second solver should record a guess time')
+const camSolve = multi.guesses.find((guess) => guess.playerId === cam)
+assert(
+  typeof camSolve?.elapsedMs === 'number' &&
+    typeof bobSolve?.elapsedMs === 'number' &&
+    camSolve.elapsedMs >= bobSolve.elapsedMs,
+  'Cam should not be faster than Bob on the same board',
+)
+const allRows = turnSolveRows(Object.values(multi.players), multi.artistId, multi.guesses)
+assert(allRows.map((row) => row.playerId).join(',') === `${guest},${cam}`, 'times should list solvers first')
+assert(allRows[0]?.place === 1 && allRows[1]?.place === 2, 'places should follow solve order')
 
 const revealView = toRoomState(multi, cam, 'TEST')
 assert(

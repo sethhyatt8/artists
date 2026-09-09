@@ -150,7 +150,11 @@ function normalizeGuesses(raw: unknown): Guess[] {
         ? guess.id
         : `g-${index + 1}`
     seen.add(id)
-    guesses.push({ ...guess, id })
+    const elapsedMs =
+      typeof guess.elapsedMs === 'number' && Number.isFinite(guess.elapsedMs)
+        ? Math.max(1, Math.round(guess.elapsedMs))
+        : undefined
+    guesses.push({ ...guess, id, elapsedMs })
   }
   return guesses.sort((a, b) => guessOrder(a.id) - guessOrder(b.id))
 }
@@ -397,6 +401,59 @@ function allGuessersCorrect(room: StoredRoom) {
 export function finishTurnIfGuessersDone(room: StoredRoom) {
   if (room.phase !== 'drawing' || !allGuessersCorrect(room)) return room
   return endTurn(room)
+}
+
+export type TurnSolveRow = {
+  playerId: string
+  name: string
+  characterId?: string
+  elapsedMs: number | null
+  place: number | null
+}
+
+export function turnSolveRows(
+  players: Player[],
+  artistId: string | null,
+  guesses: Guess[],
+): TurnSolveRow[] {
+  const guessers = players.filter((player) => player.id !== artistId)
+  const solved = new Map<string, Guess>()
+  for (const guess of sortGuesses(guesses)) {
+    if (!guess.correct || solved.has(guess.playerId)) continue
+    solved.set(guess.playerId, guess)
+  }
+  const ordered = [...solved.values()].sort((a, b) => {
+    const ea = a.elapsedMs ?? Number.MAX_SAFE_INTEGER
+    const eb = b.elapsedMs ?? Number.MAX_SAFE_INTEGER
+    if (ea !== eb) return ea - eb
+    return guessSeq(a) - guessSeq(b)
+  })
+  const placeById = new Map(ordered.map((guess, index) => [guess.playerId, index + 1]))
+  return guessers
+    .map((player) => {
+      const guess = solved.get(player.id)
+      return {
+        playerId: player.id,
+        name: player.name,
+        characterId: player.characterId,
+        elapsedMs: guess?.elapsedMs ?? null,
+        place: placeById.get(player.id) ?? null,
+      }
+    })
+    .sort((a, b) => {
+      if (a.place != null && b.place != null) return a.place - b.place
+      if (a.place != null) return -1
+      if (b.place != null) return 1
+      return a.name.localeCompare(b.name)
+    })
+}
+
+export function formatGuessMs(ms: number) {
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  const mins = Math.floor(seconds / 60)
+  const rest = seconds - mins * 60
+  return `${mins}m ${rest.toFixed(1)}s`
 }
 
 function formatNameList(names: string[]) {
@@ -665,6 +722,7 @@ export function applyMessage(
     if (hasCorrectGuess(room, senderId)) return room
     const correct = answersMatch(text, room.prompt)
     const nextSerial = room.guessSerial + 1
+    const elapsedMs = correct ? elapsedSinceDraw(room) : undefined
     const guess: Guess = {
       id: `g-${nextSerial}-${senderId}`,
       playerId: senderId,
@@ -672,13 +730,14 @@ export function applyMessage(
       text,
       correct,
       seq: nextSerial,
+      ...(elapsedMs ? { elapsedMs } : {}),
     }
     const guesses = [...room.guesses, guess].slice(-40)
     let next: StoredRoom = { ...room, guesses, guessSerial: nextSerial }
     if (!correct) return next
     next = {
       ...next,
-      guessTimes: recordGuessTime(next, senderId, player.name),
+      guessTimes: recordGuessTime(next, senderId, player.name, elapsedMs),
     }
     if (!allGuessersCorrect(next)) return next
     return endTurn(next)
@@ -806,13 +865,23 @@ function archiveCollage(room: StoredRoom): SavedCollage[] {
   ]
 }
 
-function recordGuessTime(room: StoredRoom, playerId: string, name: string): Record<string, GuessClock> {
-  const started = room.drawStartedMs ?? (room.deadlineMs ? room.deadlineMs - room.settings.turnSeconds * 1000 : Date.now())
-  const elapsed = Math.max(1, Date.now() - started)
+function elapsedSinceDraw(room: StoredRoom) {
+  const started =
+    room.drawStartedMs ??
+    (room.deadlineMs ? room.deadlineMs - room.settings.turnSeconds * 1000 : Date.now())
+  return Math.max(1, Date.now() - started)
+}
+
+function recordGuessTime(
+  room: StoredRoom,
+  playerId: string,
+  name: string,
+  elapsedMs = elapsedSinceDraw(room),
+): Record<string, GuessClock> {
   const current = room.guessTimes[playerId] ?? { name, times: [] }
   return {
     ...room.guessTimes,
-    [playerId]: { name, times: [...current.times, elapsed] },
+    [playerId]: { name, times: [...current.times, elapsedMs] },
   }
 }
 
