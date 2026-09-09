@@ -23,6 +23,7 @@ import { useGameRoom, type RoomSession } from '../game/useGameRoom'
 import { formatGuessMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { GuessBurst } from '../components/GuessBurst'
+import { LocalCues } from '../components/LocalCues'
 
 type RoomScreenProps = {
   session: RoomSession
@@ -543,6 +544,7 @@ function TurnHeader({
         <h1>{prompt ?? (state.phase === 'drawing' ? 'Guess!' : 'Artists')}</h1>
       </div>
       <div className="turn-tools">
+        {state.phase === 'drawing' ? <LocalCues /> : null}
         {seconds !== null ? (
           <p className={seconds <= 10 ? 'timer urgent' : 'timer'}>{formatTime(seconds)}</p>
         ) : null}

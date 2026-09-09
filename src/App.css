@@ -221,6 +221,7 @@
 }
 
 .canvas-stage {
+  position: relative;
   flex: 1 1 auto;
   width: 100%;
   min-height: min(52svh, 360px);
@@ -274,6 +275,89 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.local-cues {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.local-cues-label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.local-cue-btn {
+  border-color: var(--ember);
+  color: var(--ember);
+  background: var(--ember-dim);
+}
+
+.local-cue-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(26, 20, 16, 0.28), transparent 72%);
+  animation: local-cue-veil 1.6s ease both;
+}
+
+body > .local-cue-overlay {
+  position: fixed;
+  z-index: 90;
+}
+
+.local-cue-stamp {
+  margin: 0;
+  max-width: 92%;
+  font-family: var(--display);
+  font-size: clamp(36px, 11vw, 108px);
+  line-height: 0.88;
+  text-align: center;
+  color: #d4483a;
+  text-shadow:
+    3px 3px 0 #1a1410,
+    -1px -1px 0 #f4e6d3;
+  transform: rotate(-7deg);
+  animation: local-cue-stamp 1.6s cubic-bezier(0.15, 1.4, 0.32, 1) both;
+}
+
+@keyframes local-cue-veil {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes local-cue-stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-7deg) scale(1.45);
+  }
+  18% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(0.96);
+  }
+  32% {
+    transform: rotate(-7deg) scale(1.04);
+  }
+  70% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-7deg) scale(1.06);
+  }
 }
 
 .timer {
@@ -1100,6 +1184,11 @@
   body:not(.preview-motion) .avatar-pose .pose-frame {
     animation: none;
     filter: none;
+  }
+
+  .local-cue-overlay,
+  .local-cue-stamp {
+    animation: local-cue-veil 1.6s ease both;
   }
 }
 
