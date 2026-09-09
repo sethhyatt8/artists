@@ -176,9 +176,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       <main className="screen room pick">
         <TurnHeader state={state} seconds={null} onLeave={leave} />
         <p className="lede">
-          Pick one prompt. You get more unused choices each turn — none of these
-          will come back later. The {formatTurnLength(state.settings.turnSeconds)}{' '}
-          timer starts as soon as you tap it.
+          Pick one prompt. The {formatTurnLength(state.settings.turnSeconds)} timer
+          starts as soon as you tap it.
         </p>
         <div className="pick-grid">
           {state.options.map((group) => (

@@ -121,9 +121,6 @@ export function HomeScreen({
             <span>Guest</span>
           </button>
         </div>
-        <p className="hint">
-          Keep the same face each night. The name below can be anything for this game.
-        </p>
       </div>
 
       <label className="field">
