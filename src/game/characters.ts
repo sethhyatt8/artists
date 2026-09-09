@@ -53,6 +53,7 @@ export const CHARACTERS: Character[] = [
     paper: '#ddd0ea',
     ink: '#1a1410',
     look: 'bow',
+    portrait: 'eloise.png',
   },
   {
     id: 'julia',
@@ -61,6 +62,7 @@ export const CHARACTERS: Character[] = [
     paper: '#edcfc4',
     ink: '#1a1410',
     look: 'curl',
+    portrait: 'julia.png',
   },
 ]
 
