@@ -36,6 +36,7 @@ export const CHARACTERS: Character[] = [
     paper: '#d8e7c8',
     ink: '#1a1410',
     look: 'star',
+    portrait: 'harper.png',
   },
   {
     id: 'jaxon',
