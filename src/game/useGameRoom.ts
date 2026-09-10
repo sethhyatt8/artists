@@ -12,37 +12,19 @@ import {
   roomPatch,
   sameDrawTurn,
   skipStaleArtist,
-  staleGuestIds,
   toFirebaseRoom,
   toRoomState,
   type StoredRoom,
 } from './roomLogic'
 import { MAX_PLAYERS, sanitizeName, type ClientMessage, type RoomState } from './protocol'
 import { sanitizeCharacterId } from './characters'
+import { rememberTabRole, replaceGuestSeat, seatIdFor } from './seats'
 
 export type RoomSession = {
   roomCode: string
   name: string
   intent: 'create' | 'join'
   characterId?: string
-}
-
-function seatId(roomCode: string) {
-  const key = `artists-seat:${roomCode}`
-  try {
-    const saved = localStorage.getItem(key)
-    if (saved) return saved
-  } catch {
-    // Private browsing can block localStorage.
-  }
-  const existing = sessionStorage.getItem('artists-tab-id')
-  const id = existing || crypto.randomUUID()
-  try {
-    localStorage.setItem(key, id)
-  } catch {
-    sessionStorage.setItem('artists-tab-id', id)
-  }
-  return id
 }
 
 function piecesRecord(pieces: { id: string }[]) {
@@ -55,7 +37,7 @@ export function useGameRoom(session: RoomSession) {
   const [status, setStatus] = useState<'connecting' | 'open' | 'closed'>(
     'connecting',
   )
-  const selfId = useRef(seatId(session.roomCode))
+  const selfId = useRef(seatIdFor(session.roomCode, session.intent))
   const sessionRef = useRef(session)
   const latestState = useRef<RoomState | null>(null)
   const latestRoom = useRef<StoredRoom | null>(null)
@@ -69,8 +51,9 @@ export function useGameRoom(session: RoomSession) {
     }
 
     const code = session.roomCode
-    const id = seatId(code)
+    let id = seatIdFor(code, session.intent)
     selfId.current = id
+    rememberTabRole(code, session.intent)
     const name = sanitizeName(session.name)
     const characterId = sanitizeCharacterId(session.characterId) ?? null
     const path = `rooms/${code}`
@@ -95,6 +78,14 @@ export function useGameRoom(session: RoomSession) {
         if (!response.ok) throw new Error(`Firebase write failed (${response.status})`)
         if (!stopped) publish(created)
         return 'ok'
+      }
+      if (
+        session.intent === 'join' &&
+        room.players[id] &&
+        (id === room.createdBy || id === room.hostId)
+      ) {
+        id = replaceGuestSeat(code)
+        selfId.current = id
       }
       if (!room.players[id] && Object.keys(room.players).length >= MAX_PLAYERS) {
         return 'full'
@@ -169,7 +160,6 @@ export function useGameRoom(session: RoomSession) {
         setStatus('closed')
       })
 
-    const connectedAt = Date.now()
     const heartbeat = window.setInterval(() => {
       const room = latestRoom.current
       const me = room?.players[id]
@@ -190,11 +180,6 @@ export function useGameRoom(session: RoomSession) {
             return toFirebaseRoom(next)
           })
         }
-      }
-      if (room.phase !== 'lobby') return
-      if (Date.now() - connectedAt < 12_000) return
-      for (const staleId of staleGuestIds(room, id)) {
-        void rtdbSet(`${path}/players/${staleId}`, null)
       }
     }, 4000)
 

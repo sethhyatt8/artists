@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { normalizeRoomCode } from './game/protocol'
+import { readTabSession, rememberTabRole } from './game/seats'
 import { CelebrationPreview } from './screens/CelebrationPreview'
 import { HomeScreen } from './screens/HomeScreen'
 import { PracticeScreen } from './screens/PracticeScreen'
@@ -22,7 +23,7 @@ function readCelebrationsFromUrl() {
 
 export default function App() {
   const initialCode = useMemo(() => readRoomFromUrl(), [])
-  const [session, setSession] = useState<RoomSession | null>(null)
+  const [session, setSession] = useState<RoomSession | null>(() => readTabSession(initialCode))
   const [practice, setPractice] = useState(() => readPracticeFromUrl() && !initialCode)
   const [celebrations, setCelebrations] = useState(
     () => readCelebrationsFromUrl() && !initialCode,
@@ -35,6 +36,7 @@ export default function App() {
   }, [practice, celebrations, session])
 
   function enter(next: RoomSession) {
+    rememberTabRole(next.roomCode, next.intent)
     const url = new URL(window.location.href)
     url.searchParams.delete('practice')
     url.searchParams.delete('celebrations')

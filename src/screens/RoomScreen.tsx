@@ -24,6 +24,7 @@ import { formatGuessMs, remainingLockSeconds, turnElapsedMs, turnRemainingSecond
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { GuessBurst } from '../components/GuessBurst'
 import { LocalCues } from '../components/LocalCues'
+import { JOIN_BUILD } from '../game/seats'
 
 type RoomScreenProps = {
   session: RoomSession
@@ -536,6 +537,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           <p className="eyebrow">
             {isHost ? 'You are the host' : 'Joined'}
             {hostName ? ` · Host: ${hostName}` : ''}
+            {` · b${JOIN_BUILD}`}
           </p>
           <h1 className="room-code">{state.roomCode}</h1>
         </div>
