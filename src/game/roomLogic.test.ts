@@ -792,4 +792,110 @@ assert(
   'ballots should keep only the top 4 ranks',
 )
 
+let modRoom = emptyRoom(host, 'Ada')
+const modJoined = addPlayer(modRoom, guest, 'Bob')
+assert(typeof modJoined !== 'string', 'mod join should work')
+modRoom = modJoined
+const modCamJoined = addPlayer(modRoom, cam, 'Cam')
+assert(typeof modCamJoined !== 'string', 'cam join should work')
+modRoom = modCamJoined
+modRoom = unwrap(
+  applyMessage(modRoom, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+modRoom = { ...modRoom, options: [{ category: 'Food', prompts: ['pizza'] }] }
+modRoom = unwrap(applyMessage(modRoom, host, { type: 'pick', category: 'Food', prompt: 'pizza' }))
+assert(modRoom.phase === 'drawing', 'mod tests need a drawing turn')
+
+const guestCannotQuiet = unwrap(
+  applyMessage(modRoom, guest, { type: 'mod', action: 'quiet', seconds: 10 }),
+)
+assert(!guestCannotQuiet.quietUntil, 'phones must not quiet the room')
+assert(guestCannotQuiet.guesses.length === 0, 'ignored quiet must not touch guesses')
+
+const quieted = unwrap(applyMessage(modRoom, host, { type: 'mod', action: 'quiet', seconds: 10 }))
+assert(quieted.cue?.kind === 'quiet', 'quiet should stamp the room')
+assert(quieted.cue?.seconds === 10, 'quiet stamp should keep the duration')
+assert(
+  typeof quieted.quietUntil === 'number' && quieted.quietUntil > Date.now() + 8_000,
+  'quiet 10s should last about ten seconds',
+)
+const quietView = toRoomState(quieted, guest, 'TEST')
+assert(quietView.quietUntil === quieted.quietUntil, 'guessers should see remaining quiet time')
+const duringQuiet = unwrap(applyMessage(quieted, guest, { type: 'guess', text: 'banana' }))
+assert(duringQuiet.guesses.length === 0, 'quiet must block guesses')
+const duringQuietCam = unwrap(applyMessage(quieted, cam, { type: 'guess', text: 'apple' }))
+assert(duringQuietCam.guesses.length === 0, 'quiet must block every guesser')
+const afterQuiet = unwrap(
+  applyMessage({ ...quieted, quietUntil: Date.now() - 1 }, guest, { type: 'guess', text: 'banana' }),
+)
+assert(afterQuiet.guesses.length === 1, 'guesses should work again after quiet ends')
+assert(afterQuiet.guesses[0]?.text === 'banana', 'the post-quiet guess should land')
+
+const storedQuiet = normalizeStoredRoom(toFirebaseRoom(quieted))
+assert(storedQuiet?.quietUntil === quieted.quietUntil, 'quietUntil must survive a Firebase round-trip')
+assert(storedQuiet?.cue?.kind === 'quiet', 'quiet stamp must survive a Firebase round-trip')
+
+const quiet30 = unwrap(applyMessage(modRoom, host, { type: 'mod', action: 'quiet', seconds: 30 }))
+assert(
+  typeof quiet30.quietUntil === 'number' && quiet30.quietUntil > Date.now() + 28_000,
+  'quiet 30s should last about thirty seconds',
+)
+
+const spammed = unwrap(applyMessage(modRoom, guest, { type: 'guess', text: 'zzz' }))
+assert(spammed.guesses.length === 1, 'spam guess should land before a clear')
+const guestCannotClear = unwrap(
+  applyMessage(spammed, guest, { type: 'mod', action: 'clear-guesses' }),
+)
+assert(guestCannotClear.guesses.length === 1, 'phones must not clear the chat')
+const cleared = unwrap(applyMessage(spammed, host, { type: 'mod', action: 'clear-guesses' }))
+assert(cleared.guesses.length === 0, 'clear should empty this turn’s guesses')
+assert(cleared.guessSerial === spammed.guessSerial, 'clear must not rewind guess ids')
+assert((cleared.guessWipe ?? 0) === (spammed.guessWipe ?? 0) + 1, 'clear should bump the wipe counter')
+assert(cleared.cue?.kind === 'cleared', 'clear should stamp NICE TRY')
+const storedClear = normalizeStoredRoom(toFirebaseRoom(cleared))
+assert(storedClear?.guesses.length === 0, 'cleared guesses must survive a Firebase round-trip')
+assert(storedClear?.guessWipe === cleared.guessWipe, 'guessWipe must survive a Firebase round-trip')
+
+const muted = unwrap(
+  applyMessage(spammed, host, { type: 'mod', action: 'mute-player', playerId: guest, seconds: 30 }),
+)
+assert(muted.cue?.kind === 'mute', 'muting a kid should stamp SHHH')
+assert(muted.cue?.name === 'Bob', 'mute stamp should name the kid')
+assert(
+  typeof muted.mutedUntil?.[guest] === 'number' && muted.mutedUntil[guest] > Date.now() + 20_000,
+  'mute 30s should last about thirty seconds',
+)
+const mutedSelf = unwrap(
+  applyMessage(spammed, host, { type: 'mod', action: 'mute-player', playerId: host }),
+)
+assert(!mutedSelf.mutedUntil?.[host], 'host should not mute the artist seat')
+const mutedGuess = unwrap(applyMessage(muted, guest, { type: 'guess', text: 'nope' }))
+assert(mutedGuess.guesses.length === muted.guesses.length, 'a muted kid must not post')
+const otherStillGuesses = unwrap(applyMessage(muted, cam, { type: 'guess', text: 'hello' }))
+assert(
+  otherStillGuesses.guesses.some((guess) => guess.playerId === cam && guess.text === 'hello'),
+  'other kids should still be able to guess while one is muted',
+)
+const afterMute = unwrap(
+  applyMessage(
+    { ...muted, mutedUntil: { [guest]: Date.now() - 1 } },
+    guest,
+    { type: 'guess', text: 'later' },
+  ),
+)
+assert(
+  afterMute.guesses.some((guess) => guess.text === 'later'),
+  'a muted kid should be able to guess after the mute ends',
+)
+const storedMute = normalizeStoredRoom(toFirebaseRoom(muted))
+assert(storedMute?.mutedUntil?.[guest] === muted.mutedUntil?.[guest], 'mutedUntil must survive Firebase')
+
+const revealQuiet = unwrap(
+  applyMessage({ ...modRoom, phase: 'reveal' }, host, { type: 'mod', action: 'quiet', seconds: 10 }),
+)
+assert(!revealQuiet.quietUntil, 'mod tools should only work during collage')
+
 console.log('roomLogic tests passed')

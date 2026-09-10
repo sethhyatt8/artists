@@ -20,7 +20,7 @@ import {
   type ShapeSet,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
-import { formatGuessMs, turnElapsedMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
+import { formatGuessMs, remainingLockSeconds, turnElapsedMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { GuessBurst } from '../components/GuessBurst'
 import { LocalCues } from '../components/LocalCues'
@@ -53,6 +53,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const canvasTimer = useRef<number | null>(null)
   const latestPieces = useRef<CollagePiece[]>([])
   const timesUpSent = useRef(false)
+  const lastGuessSent = useRef(0)
 
   const connectionId = state?.selfId ?? ''
   const isHost = session.intent === 'create'
@@ -72,6 +73,18 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
 
   function fireNoSpelling() {
     send({ type: 'cue', kind: 'no-spelling' })
+  }
+
+  function fireQuiet(seconds: 10 | 30) {
+    send({ type: 'mod', action: 'quiet', seconds })
+  }
+
+  function fireClearGuesses() {
+    send({ type: 'mod', action: 'clear-guesses' })
+  }
+
+  function fireMutePlayer(playerId: string) {
+    send({ type: 'mod', action: 'mute-player', playerId, seconds: 30 })
   }
 
   useEffect(() => {
@@ -172,6 +185,11 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     event.preventDefault()
     const text = guessText.trim()
     if (!text || !state) return
+    const now = Date.now()
+    if (remainingLockSeconds(state.quietUntil, now) > 0) return
+    if (remainingLockSeconds(state.mutedUntil[connectionId], now) > 0) return
+    if (now - lastGuessSent.current < 1200) return
+    lastGuessSent.current = now
     send({
       type: 'guess',
       text,
@@ -223,6 +241,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           seconds={null}
           onLeave={leave}
           onCue={fireNoSpelling}
+          onQuiet={fireQuiet}
+          onClearGuesses={fireClearGuesses}
           showCueButton={showCueButton}
         />
         <p className="lede">
@@ -260,6 +280,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           seconds={null}
           onLeave={leave}
           onCue={fireNoSpelling}
+          onQuiet={fireQuiet}
+          onClearGuesses={fireClearGuesses}
           showCueButton={showCueButton}
         />
         <section className="panel">
@@ -284,6 +306,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
+          onQuiet={fireQuiet}
+          onClearGuesses={fireClearGuesses}
           showCueButton={showCueButton}
         />
         <p className="hint">
@@ -295,7 +319,17 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           pieces={pieces}
           onPiecesChange={queueCanvas}
           hint={`You have ${formatTurnLength(state.settings.turnSeconds)}. Keep going until everyone guesses it or time runs out.`}
-          extraRight={<GuessFeed guesses={state.guesses} players={state.players} />}
+          extraRight={
+            <GuessFeed
+              guesses={state.guesses}
+              players={state.players}
+              artistId={state.artistId}
+              selfId={connectionId}
+              mutedUntil={state.mutedUntil}
+              canModerate={showCueButton}
+              onMutePlayer={fireMutePlayer}
+            />
+          }
           shapeSets={state.settings.shapeSets}
         />
       </main>
@@ -310,6 +344,9 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     const solvedCount = new Set(
       state.guesses.filter((guess) => guess.correct).map((guess) => guess.playerId),
     ).size
+    const quietLeft = remainingLockSeconds(state.quietUntil)
+    const mutedLeft = remainingLockSeconds(state.mutedUntil[connectionId])
+    const chatLocked = quietLeft > 0 || mutedLeft > 0
     return (
       <main className="screen practice guesser-screen">
         <TurnHeader
@@ -318,6 +355,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={alreadyGotIt ? state.prompt : undefined}
           onCue={fireNoSpelling}
+          onQuiet={fireQuiet}
+          onClearGuesses={fireClearGuesses}
           showCueButton={showCueButton}
         />
         <p className="hint">
@@ -337,7 +376,15 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             />
           </div>
           <aside className="sidebar sidebar-right">
-            <GuessFeed guesses={state.guesses} players={state.players} />
+            <GuessFeed
+              guesses={state.guesses}
+              players={state.players}
+              artistId={state.artistId}
+              selfId={connectionId}
+              mutedUntil={state.mutedUntil}
+              canModerate={showCueButton}
+              onMutePlayer={fireMutePlayer}
+            />
             {alreadyGotIt ? (
               <div className="got-it-banner">
                 <p className="got-it-title">You got it!</p>
@@ -346,6 +393,12 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
                 ) : null}
                 <p className="hint">Don’t say it out loud. Hang tight until the turn ends.</p>
               </div>
+            ) : chatLocked ? (
+              <p className="guess-lock">
+                {quietLeft > 0
+                  ? `Quiet — ${quietLeft}s`
+                  : `You’re muted — ${mutedLeft}s`}
+              </p>
             ) : (
               <form className="guess-form" onSubmit={sendGuess} autoComplete="off">
                 <label className="field">
@@ -384,6 +437,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
+          onQuiet={fireQuiet}
+          onClearGuesses={fireClearGuesses}
           showCueButton={showCueButton}
         />
         <p className="lede">{revealLede(state, winnerName)}</p>
@@ -599,6 +654,8 @@ function TurnHeader({
   onLeave,
   prompt,
   onCue,
+  onQuiet,
+  onClearGuesses,
   showCueButton,
 }: {
   state: RoomState
@@ -606,6 +663,8 @@ function TurnHeader({
   onLeave: () => void
   prompt?: string | null
   onCue: () => void
+  onQuiet: (seconds: 10 | 30) => void
+  onClearGuesses: () => void
   showCueButton: boolean
 }) {
   return (
@@ -620,7 +679,14 @@ function TurnHeader({
       </div>
       <div className="turn-tools">
         {state.phase === 'drawing' ? (
-          <LocalCues cue={state.cue} onCue={onCue} showButton={showCueButton} />
+          <LocalCues
+            cue={state.cue}
+            quietUntil={state.quietUntil}
+            onCue={onCue}
+            onQuiet={onQuiet}
+            onClearGuesses={onClearGuesses}
+            showButton={showCueButton}
+          />
         ) : null}
         {seconds !== null ? (
           <p className={seconds <= 10 ? 'timer urgent' : 'timer'}>{formatTime(seconds)}</p>
@@ -691,13 +757,24 @@ function TurnSolveSummary({ state }: { state: RoomState }) {
 function GuessFeed({
   guesses,
   players,
+  artistId,
+  selfId,
+  mutedUntil,
+  canModerate = false,
+  onMutePlayer,
 }: {
   guesses: Guess[]
   players: Player[]
+  artistId?: string | null
+  selfId?: string
+  mutedUntil?: Record<string, number>
+  canModerate?: boolean
+  onMutePlayer?: (playerId: string) => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const tailKey = guesses.length > 0 ? guesses[guesses.length - 1]?.id : 'empty'
   const byId = new Map(players.map((player) => [player.id, player]))
+  const now = Date.now()
 
   useEffect(() => {
     const node = scroller.current
@@ -713,16 +790,34 @@ function GuessFeed({
       ) : (
         guesses.map((guess) => {
           const player = byId.get(guess.playerId)
+          const mutedLeft = remainingLockSeconds(mutedUntil?.[guess.playerId], now)
+          const showMute =
+            canModerate &&
+            onMutePlayer &&
+            guess.playerId !== selfId &&
+            guess.playerId !== artistId
           return (
             <div key={guess.id} className={guess.correct ? 'chat-line correct' : 'chat-line'}>
-              <span className="chat-name">
-                <CharacterAvatar
-                  characterId={player?.characterId}
-                  name={guess.name}
-                  size={22}
-                />
-                {guess.name}
-              </span>
+              <div className="chat-line-head">
+                <span className="chat-name">
+                  <CharacterAvatar
+                    characterId={player?.characterId}
+                    name={guess.name}
+                    size={22}
+                  />
+                  {guess.name}
+                </span>
+                {showMute ? (
+                  <button
+                    className="chat-mute"
+                    type="button"
+                    disabled={mutedLeft > 0}
+                    onClick={() => onMutePlayer(guess.playerId)}
+                  >
+                    {mutedLeft > 0 ? `Muted ${mutedLeft}s` : 'Mute 30s'}
+                  </button>
+                ) : null}
+              </div>
               <span className="chat-text">{guess.text}</span>
             </div>
           )

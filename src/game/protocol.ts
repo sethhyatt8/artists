@@ -84,10 +84,18 @@ export type GuessChampion = {
   correctCount: number
 }
 
+export type RoomCueKind = 'no-spelling' | 'quiet' | 'mute' | 'cleared'
+
+export const QUIET_SECONDS = [10, 30] as const
+export type QuietSeconds = (typeof QUIET_SECONDS)[number]
+export const PLAYER_MUTE_SECONDS = 30
+
 export type RoomCue = {
-  kind: 'no-spelling'
+  kind: RoomCueKind
   at: number
   by: string
+  seconds?: number
+  name?: string
 }
 
 export type RoomState = {
@@ -116,6 +124,8 @@ export type RoomState = {
   favorites: RankedCollage[]
   guessChampion: GuessChampion | null
   cue: RoomCue | null
+  quietUntil: number | null
+  mutedUntil: Record<string, number>
   seatedIds: string[]
 }
 
@@ -131,6 +141,9 @@ export type ClientMessage =
   | { type: 'closeVote' }
   | { type: 'backToLobby' }
   | { type: 'cue'; kind: 'no-spelling' }
+  | { type: 'mod'; action: 'quiet'; seconds: QuietSeconds }
+  | { type: 'mod'; action: 'clear-guesses' }
+  | { type: 'mod'; action: 'mute-player'; playerId: string; seconds?: number }
 
 export type ServerMessage =
   | { type: 'state'; state: RoomState }
@@ -206,6 +219,24 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
     }
     if (parsed.type === 'cue' && parsed.kind === 'no-spelling') {
       return { type: 'cue', kind: 'no-spelling' }
+    }
+    if (parsed.type === 'mod') {
+      if (parsed.action === 'quiet' && (parsed.seconds === 10 || parsed.seconds === 30)) {
+        return { type: 'mod', action: 'quiet', seconds: parsed.seconds }
+      }
+      if (parsed.action === 'clear-guesses') {
+        return { type: 'mod', action: 'clear-guesses' }
+      }
+      if (parsed.action === 'mute-player' && typeof parsed.playerId === 'string' && parsed.playerId) {
+        const seconds =
+          parsed.seconds === 10 || parsed.seconds === 30 ? parsed.seconds : PLAYER_MUTE_SECONDS
+        return {
+          type: 'mod',
+          action: 'mute-player',
+          playerId: parsed.playerId.slice(0, 80),
+          seconds,
+        }
+      }
     }
     return null
   } catch {

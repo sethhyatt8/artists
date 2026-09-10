@@ -1,7 +1,9 @@
 import {
   DEFAULT_SETTINGS,
   MAX_PLAYERS,
+  MAX_NAME_LENGTH,
   MAX_VOTE_RANKS,
+  PLAYER_MUTE_SECONDS,
   sanitizeGameSettings,
   sanitizeName,
   type ClientMessage,
@@ -52,12 +54,15 @@ export type StoredRoom = {
   settings: GameSettings
   round: number
   guessSerial: number
+  guessWipe: number
   collages: SavedCollage[]
   votes: Record<string, string[]>
   guessTimes: Record<string, GuessClock>
   drawStartedMs: number | null
   usedPrompts: string[]
   cue?: RoomCue | null
+  quietUntil?: number | null
+  mutedUntil?: Record<string, number>
 }
 
 export function emptyRoom(
@@ -84,12 +89,15 @@ export function emptyRoom(
     settings: { ...DEFAULT_SETTINGS },
     round: 0,
     guessSerial: 0,
+    guessWipe: 0,
     collages: [],
     votes: {},
     guessTimes: {},
     drawStartedMs: null,
     usedPrompts: [],
     cue: null,
+    quietUntil: null,
+    mutedUntil: {},
   }
 }
 
@@ -128,13 +136,49 @@ function readCounter(value: unknown) {
   return 0
 }
 
+function isRoomCueKind(value: unknown): value is RoomCue['kind'] {
+  return value === 'no-spelling' || value === 'quiet' || value === 'mute' || value === 'cleared'
+}
+
 function readCue(value: unknown): RoomCue | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const cue = value as Partial<RoomCue>
-  if (cue.kind !== 'no-spelling') return null
+  if (!isRoomCueKind(cue.kind)) return null
   if (typeof cue.at !== 'number' || !Number.isFinite(cue.at)) return null
   if (typeof cue.by !== 'string' || !cue.by) return null
-  return { kind: 'no-spelling', at: cue.at, by: cue.by }
+  const seconds =
+    cue.seconds === 10 || cue.seconds === 30 ? cue.seconds : undefined
+  const name =
+    typeof cue.name === 'string' && cue.name.trim()
+      ? cue.name.trim().slice(0, MAX_NAME_LENGTH)
+      : undefined
+  return {
+    kind: cue.kind,
+    at: cue.at,
+    by: cue.by,
+    ...(seconds ? { seconds } : {}),
+    ...(name ? { name } : {}),
+  }
+}
+
+function readMutedUntil(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const muted: Record<string, number> = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) muted[id] = value
+  }
+  return muted
+}
+
+export function remainingLockSeconds(until: number | null | undefined, now = Date.now()) {
+  if (typeof until !== 'number' || !Number.isFinite(until)) return 0
+  return Math.max(0, Math.ceil((until - now) / 1000))
+}
+
+function chatLockedFor(room: StoredRoom, playerId: string, now = Date.now()) {
+  if (typeof room.quietUntil === 'number' && now < room.quietUntil) return true
+  const muted = room.mutedUntil?.[playerId]
+  return typeof muted === 'number' && now < muted
 }
 
 function guessOrder(id: string) {
@@ -272,6 +316,7 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
     settings: sanitizeGameSettings(value.settings),
     round: typeof value.round === 'number' ? value.round : 0,
     guessSerial: readCounter(value.guessSerial),
+    guessWipe: readCounter(value.guessWipe),
     collages: asArray<SavedCollage>(value.collages).map((item) => ({
       id: typeof item?.id === 'string' ? item.id : 'c-0',
       round: typeof item?.round === 'number' ? item.round : 0,
@@ -285,6 +330,8 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
     drawStartedMs: typeof value.drawStartedMs === 'number' ? value.drawStartedMs : null,
     usedPrompts: asArray<string>(value.usedPrompts).filter((item) => typeof item === 'string'),
     cue: readCue(value.cue),
+    quietUntil: typeof value.quietUntil === 'number' ? value.quietUntil : null,
+    mutedUntil: readMutedUntil(value.mutedUntil),
   }
 }
 
@@ -344,6 +391,8 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     favorites: rankFavorites(room.collages, room.votes),
     guessChampion: pickGuessChampion(room.guessTimes, room.players),
     cue: room.cue ?? null,
+    quietUntil: room.quietUntil ?? null,
+    mutedUntil: room.mutedUntil ?? {},
     seatedIds: seated,
   }
 }
@@ -517,6 +566,7 @@ export function sameDrawTurn(prev: StoredRoom, next: StoredRoom) {
     next.phase === 'drawing' &&
     prev.round === next.round &&
     prev.artistId === next.artistId &&
+    (prev.guessWipe ?? 0) === (next.guessWipe ?? 0) &&
     prev.drawStartedMs === next.drawStartedMs
   )
 }
@@ -632,12 +682,15 @@ const ROOM_KEYS: (keyof StoredRoom)[] = [
   'settings',
   'round',
   'guessSerial',
+  'guessWipe',
   'collages',
   'votes',
   'guessTimes',
   'drawStartedMs',
   'usedPrompts',
   'cue',
+  'quietUntil',
+  'mutedUntil',
 ]
 
 export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, unknown> {
@@ -837,9 +890,40 @@ export function applyMessage(
     }
   }
 
+  if (message.type === 'mod' && isController(room, senderId) && room.phase === 'drawing') {
+    const at = Date.now()
+    if (message.action === 'quiet') {
+      return {
+        ...room,
+        quietUntil: at + message.seconds * 1000,
+        cue: { kind: 'quiet', at, by: senderId, seconds: message.seconds },
+      }
+    }
+    if (message.action === 'clear-guesses') {
+      return {
+        ...room,
+        guesses: [],
+        guessWipe: (room.guessWipe ?? 0) + 1,
+        cue: { kind: 'cleared', at, by: senderId },
+      }
+    }
+    if (message.action === 'mute-player') {
+      const targetId = message.playerId
+      const target = room.players[targetId]
+      if (!target || targetId === room.artistId || targetId === senderId) return room
+      const seconds = message.seconds === 10 || message.seconds === 30 ? message.seconds : PLAYER_MUTE_SECONDS
+      return {
+        ...room,
+        mutedUntil: { ...(room.mutedUntil ?? {}), [targetId]: at + seconds * 1000 },
+        cue: { kind: 'mute', at, by: senderId, seconds, name: target.name },
+      }
+    }
+  }
+
   if (message.type === 'guess' && room.phase === 'drawing' && senderId !== room.artistId) {
     const text = message.text.trim()
     if (!text || !room.prompt) return room
+    if (chatLockedFor(room, senderId)) return room
     if (hasCorrectGuess(room, senderId)) return room
     const correct = answersMatch(text, room.prompt)
     const nextSerial = room.guessSerial + 1
@@ -938,6 +1022,9 @@ function beginPick(room: StoredRoom): StoredRoom {
       winnerName: null,
       drawStartedMs: null,
       usedPrompts: mergeUsedPrompts(room.usedPrompts, promptsFromOptions(options)),
+      cue: null,
+      quietUntil: null,
+      mutedUntil: {},
     }
   }
   return clearTurn({ ...room, phase: 'lobby', order })
@@ -1112,5 +1199,8 @@ function clearTurn(room: StoredRoom): StoredRoom {
     guessTimes: {},
     drawStartedMs: null,
     usedPrompts: [],
+    cue: null,
+    quietUntil: null,
+    mutedUntil: {},
   }
 }

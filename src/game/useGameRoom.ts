@@ -195,6 +195,35 @@ export function useGameRoom(session: RoomSession) {
       return
     }
 
+    if (message.type === 'mod') {
+      const room = latestRoom.current
+      if (!room) return
+      const next = applyMessage(room, id, message)
+      if ('error' in next) return
+      latestRoom.current = next
+      latestState.current = toRoomState(next, id, code)
+      setState(latestState.current)
+      const writes: Promise<unknown>[] = []
+      if (next.cue) writes.push(rtdbSet(`${path}/cue`, next.cue))
+      if ((next.quietUntil ?? null) !== (room.quietUntil ?? null)) {
+        writes.push(rtdbSet(`${path}/quietUntil`, next.quietUntil ?? null))
+      }
+      if (JSON.stringify(next.mutedUntil ?? {}) !== JSON.stringify(room.mutedUntil ?? {})) {
+        writes.push(
+          rtdbSet(
+            `${path}/mutedUntil`,
+            Object.keys(next.mutedUntil ?? {}).length > 0 ? next.mutedUntil : null,
+          ),
+        )
+      }
+      if ((next.guessWipe ?? 0) !== (room.guessWipe ?? 0)) {
+        writes.push(rtdbSet(`${path}/guesses`, null))
+        writes.push(rtdbSet(`${path}/guessWipe`, next.guessWipe ?? 0))
+      }
+      if (writes.length > 0) void Promise.all(writes)
+      return
+    }
+
     if (message.type === 'guess') {
       const room = latestRoom.current
       if (!room) return
