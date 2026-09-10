@@ -13,7 +13,9 @@ import {
 import {
   addPlayer,
   applyMessage,
+  claimSeat,
   emptyRoom,
+  ensureSeated,
   isSpuriousDrawEnd,
   mergeGuessLists,
   normalizeStoredRoom,
@@ -44,6 +46,41 @@ let room = emptyRoom(host, 'Ada')
 const joined = addPlayer(room, guest, 'Bob')
 assert(typeof joined !== 'string', 'join should work')
 room = joined
+
+const missingRoom = claimSeat(null, guest, 'Bob', null, 'join')
+assert(missingRoom === null, 'joining a missing room should fail')
+const orphaned = {
+  ...emptyRoom(host, 'Ada'),
+  players: {},
+  order: [],
+  usedPrompts: ['pizza'],
+}
+const reclaimOrphan = claimSeat(orphaned, guest, 'Bob', null, 'join')
+assert(typeof reclaimOrphan !== 'string' && reclaimOrphan, 'join should work even if the host seat briefly vanished')
+assert(reclaimOrphan.players[guest], 'the joining kid should get a seat in an empty lobby')
+assert(reclaimOrphan.usedPrompts.includes('pizza'), 'rejoining an empty lobby must not wipe prompt memory')
+const hostBack = claimSeat(orphaned, host, 'Ada', null, 'create')
+assert(typeof hostBack !== 'string' && hostBack, 'creating again should sit back down in the existing room')
+assert(hostBack.players[host], 'the host should be seated')
+assert(hostBack.usedPrompts.includes('pizza'), 'recreating must not wipe the existing room')
+
+const hostMissing = { ...room, players: { [guest]: room.players[guest] } }
+const seatedHost = ensureSeated(hostMissing, host, 'Ada', null)
+assert(typeof seatedHost !== 'string', 'ensureSeated should restore the host')
+assert(seatedHost.players[host], 'the host seat should exist before start')
+const startedAfterReseat = unwrap(
+  applyMessage(seatedHost, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+assert(startedAfterReseat.phase === 'picking', 'start should work once both seats are real')
+
+const onePlayerStart = applyMessage(emptyRoom(host, 'Ada'), host, {
+  type: 'start',
+  settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+})
+assert('error' in onePlayerStart, 'a lone host still cannot start')
 
 room = unwrap(
   applyMessage(room, host, {

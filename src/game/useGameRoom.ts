@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet, rtdbTransaction } from './rtdb'
 import {
-  addPlayer,
   applyMessage,
-  emptyRoom,
+  claimSeat,
+  ensureSeated,
   finishTurnIfGuessersDone,
   isSpuriousDrawEnd,
   mergeGuessLists,
   normalizeStoredRoom,
-  playerCount,
-  playerRecord,
   roomPatch,
   sameDrawTurn,
   skipStaleArtist,
@@ -80,45 +78,49 @@ export function useGameRoom(session: RoomSession) {
     const stopListen = rtdbListen(path, (data) => {
       const room = normalizeStoredRoom(data)
       if (!room) return
-      let visible = room.players[id]
-        ? room
-        : ({
-            ...room,
-            players: { ...room.players, [id]: playerRecord(id, name, 0, characterId) },
-          } satisfies StoredRoom)
       setError(null)
-      if (latestRoom.current && isSpuriousDrawEnd(latestRoom.current, visible)) {
+      if (latestRoom.current && isSpuriousDrawEnd(latestRoom.current, room)) {
         return
       }
-      if (latestRoom.current && sameDrawTurn(latestRoom.current, visible)) {
+      let visible = room
+      if (latestRoom.current && sameDrawTurn(latestRoom.current, room)) {
         visible = {
-          ...visible,
-          guesses: mergeGuessLists(latestRoom.current.guesses, visible.guesses),
+          ...room,
+          guesses: mergeGuessLists(latestRoom.current.guesses, room.guesses),
         }
       }
       latestRoom.current = visible
       latestState.current = toRoomState(visible, id, code)
       setState(latestState.current)
+      if (!room.players[id] && (room.phase === 'lobby' || session.intent === 'create')) {
+        void reseat()
+      }
     })
+
+    function reseat() {
+      return rtdbTransaction(path, (current) => {
+        const room = normalizeStoredRoom(current)
+        const next = claimSeat(room, id, name, characterId, session.intent)
+        if (next == null || typeof next === 'string') return undefined
+        if (room && JSON.stringify(room.players) === JSON.stringify(next.players)) {
+          return undefined
+        }
+        return toFirebaseRoom(next)
+      })
+    }
 
     void rtdbTransaction(path, (current) => {
       const room = normalizeStoredRoom(current)
-      if (session.intent === 'join') {
-        if (!room || playerCount(room) === 0) return undefined
-        const next = addPlayer(room, id, name, characterId)
-        return typeof next === 'string' ? undefined : toFirebaseRoom(next)
-      }
-      if (room && playerCount(room) > 0) {
-        const next = addPlayer(room, id, name, characterId)
-        return typeof next === 'string' ? undefined : toFirebaseRoom(next)
-      }
-      return toFirebaseRoom(emptyRoom(id, name, characterId))
+      const next = claimSeat(room, id, name, characterId, session.intent)
+      if (next == null || typeof next === 'string') return undefined
+      return toFirebaseRoom(next)
     })
       .then((result) => {
         if (stopped) return
         if (!result.committed) {
+          const existing = normalizeStoredRoom(result.snapshot)
           setError(
-            session.intent === 'join'
+            session.intent === 'join' && !existing
               ? 'Room not found. Check the code, or create a room.'
               : 'This room is full (6 players).',
           )
@@ -133,9 +135,15 @@ export function useGameRoom(session: RoomSession) {
         setStatus('closed')
       })
 
+    const connectedAt = Date.now()
     const heartbeat = window.setInterval(() => {
-      void rtdbSet(`${path}/players/${id}/seenAt`, Date.now())
       const room = latestRoom.current
+      const me = room?.players[id]
+      if (me) {
+        void rtdbSet(`${path}/players/${id}`, { ...me, seenAt: Date.now() })
+      } else {
+        void reseat()
+      }
       if (!room) return
       if (room.phase === 'picking' && (room.createdBy === id || room.hostId === id)) {
         const skipped = skipStaleArtist(room)
@@ -150,6 +158,7 @@ export function useGameRoom(session: RoomSession) {
         }
       }
       if (room.phase !== 'lobby') return
+      if (Date.now() - connectedAt < 12_000) return
       for (const staleId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${staleId}`, null)
       }
@@ -159,10 +168,6 @@ export function useGameRoom(session: RoomSession) {
       stopped = true
       stopListen()
       window.clearInterval(heartbeat)
-      const phase = latestRoom.current?.phase
-      if (!phase || phase === 'lobby') {
-        void rtdbSet(`${path}/players/${id}`, null)
-      }
     }
   }, [session.intent, session.name, session.roomCode, session.characterId])
 
@@ -269,7 +274,14 @@ export function useGameRoom(session: RoomSession) {
     void rtdbTransaction(path, (current) => {
       const room = normalizeStoredRoom(current)
       if (!room) return undefined
-      const next = applyMessage(room, id, message)
+      const seated = ensureSeated(
+        room,
+        id,
+        sanitizeName(sessionRef.current.name),
+        sanitizeCharacterId(sessionRef.current.characterId) ?? null,
+      )
+      if (typeof seated === 'string') return undefined
+      const next = applyMessage(seated, id, message)
       if ('error' in next) return undefined
       return toFirebaseRoom(next)
     }).then((result) => {

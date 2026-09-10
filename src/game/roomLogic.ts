@@ -408,6 +408,31 @@ export function playerCount(room: StoredRoom) {
   return Object.keys(room.players).length
 }
 
+export function claimSeat(
+  room: StoredRoom | null,
+  id: string,
+  name: string,
+  characterId: string | null,
+  intent: 'create' | 'join',
+): StoredRoom | string | null {
+  if (intent === 'join') {
+    if (!room) return null
+    return addPlayer(room, id, name, characterId)
+  }
+  if (!room) return emptyRoom(id, name, characterId)
+  return addPlayer(room, id, name, characterId)
+}
+
+export function ensureSeated(
+  room: StoredRoom,
+  id: string,
+  name: string,
+  characterId?: string | null,
+): StoredRoom | string {
+  if (room.players[id]) return room
+  return addPlayer(room, id, name, characterId)
+}
+
 export function seatedPlayerIds(room: StoredRoom) {
   return rotationOrder(room)
 }
