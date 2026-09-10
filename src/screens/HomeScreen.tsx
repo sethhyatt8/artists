@@ -190,8 +190,8 @@ export function HomeScreen({
       )}
 
       <p className="hint">
-        Create on the TV. On every other phone or tablet, tap Join with a code —
-        even if you opened this same link. Each person needs their own Join. Up to{' '}
+        One person creates the room. Everyone else taps Join with a code — even
+        if you opened this same link. Each person needs their own Join. Up to{' '}
         {MAX_PLAYERS} players.
       </p>
     </main>
