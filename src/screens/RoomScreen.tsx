@@ -404,6 +404,11 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
             />
           </div>
           <aside className="sidebar sidebar-right">
+            {state.promptHint && !alreadyGotIt ? (
+              <p className="guess-category-hint">
+                <span className="prompt-hint">Hint: {state.promptHint}</span>
+              </p>
+            ) : null}
             <GuessFeed
               guesses={state.guesses}
               players={state.players}

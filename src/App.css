@@ -398,6 +398,10 @@
   gap: 8px;
 }
 
+.guess-category-hint {
+  margin: 0 0 8px;
+}
+
 .prompt-hint {
   display: inline-block;
   margin-left: 4px;
@@ -1348,6 +1352,11 @@
     flex: 1 1 auto;
     min-height: 56px;
     max-height: none;
+  }
+
+  .guesser-body .guess-category-hint {
+    flex: 0 0 auto;
+    margin: 0;
   }
 
   .guesser-body .guess-form,
