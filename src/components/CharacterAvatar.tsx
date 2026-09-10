@@ -14,6 +14,7 @@ type CharacterAvatarProps = {
   size?: number
   className?: string
   mood?: AvatarMood
+  poseFrames?: string[]
 }
 
 export function CharacterAvatar({
@@ -22,14 +23,14 @@ export function CharacterAvatar({
   size = 48,
   className,
   mood = 'idle',
+  poseFrames,
 }: CharacterAvatarProps) {
   const character = characterFor(characterId, name)
   const radius = Math.round(size * 0.22)
   const idleSrc = character.portrait ? portraitUrl(character.portrait) : null
+  const sourceFrames = poseFrames ?? character.celebrateFrames
   const celebrateFrames =
-    mood === 'surprise' && character.celebrateFrames && character.celebrateFrames.length >= 4
-      ? character.celebrateFrames
-      : null
+    mood === 'surprise' && sourceFrames && sourceFrames.length >= 4 ? sourceFrames : null
   const [frame, setFrame] = useState(0)
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export function CharacterAvatar({
         <img className="pose-idle" src={idleSrc} alt="" width={size} height={size} />
         {celebrateFrames.map((file, index) => (
           <img
-            key={file}
+            key={`${file}-${index}`}
             className={index === frame ? 'pose-frame is-on' : 'pose-frame'}
             src={portraitUrl(file)}
             alt=""

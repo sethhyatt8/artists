@@ -11,6 +11,14 @@ const LABELS: Record<string, string> = {
   julia: 'glasses pulse',
 }
 
+const JULIA_PINKY_FRAMES = [
+  'julia-pinky-f1.png',
+  'julia-pinky-f2.png',
+  'julia-pinky-f1.png',
+  'julia-pinky-f3.png',
+  'julia-pinky-f1.png',
+]
+
 type CelebrationPreviewProps = {
   onLeave: () => void
 }
@@ -39,7 +47,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           </button>
         </div>
       </header>
-      <p className="lede">Play once. Replay to watch again.</p>
+      <p className="lede">Play once. Replay to watch again. Pinky-up is a trial only — idle portraits stay handless, and it is not in the live game yet.</p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">
@@ -55,6 +63,19 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
             </figcaption>
           </figure>
         ))}
+        <figure key={`julia-pinky-${play}`} className="celebration-card">
+          <CharacterAvatar
+            characterId="julia"
+            name="Julia"
+            size={200}
+            mood="surprise"
+            poseFrames={JULIA_PINKY_FRAMES}
+          />
+          <figcaption>
+            <strong>Julia</strong>
+            <span>pinky-up (trial)</span>
+          </figcaption>
+        </figure>
       </div>
     </main>
   )
