@@ -16,8 +16,11 @@ import {
   mergeGuessLists,
   normalizeStoredRoom,
   roomPatch,
+  seatedPlayerIds,
+  skipStaleArtist,
   toFirebaseRoom,
   toRoomState,
+  turnElapsedMs,
   turnRemainingSeconds,
   turnSolveRows,
   type StoredRoom,
@@ -371,6 +374,52 @@ const afterLeave = unwrap(
 assert(afterLeave.phase === 'reveal', 'a player who actually left must not block the last remaining guesser')
 assert(afterLeave.winnerName === 'Bob', `expected Bob after Cam left, got ${afterLeave.winnerName}`)
 
+const late = 'guest-late'
+let lateJoin = emptyRoom(host, 'Ada')
+lateJoin = addPlayer(lateJoin, guest, 'Bob') as StoredRoom
+lateJoin = unwrap(
+  applyMessage(lateJoin, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+lateJoin = { ...lateJoin, options: [{ category: 'Food', prompts: ['pizza'] }] }
+lateJoin = unwrap(applyMessage(lateJoin, host, { type: 'pick', category: 'Food', prompt: 'pizza' }))
+const afterLate = addPlayer(lateJoin, late, 'Zoe')
+assert(typeof afterLate !== 'string', 'Zoe should be able to watch')
+assert(!afterLate.order.includes(late), 'a late join must not take a seat in this game')
+assert(
+  !seatedPlayerIds(afterLate).includes(late),
+  'late joiners must not enter the artist rotation',
+)
+const lateSolved = unwrap(applyMessage(afterLate, guest, { type: 'guess', text: 'pizza' }))
+assert(
+  lateSolved.phase === 'reveal',
+  'the original guesser must still be able to end the turn without the spectator',
+)
+
+let ghostArtist = emptyRoom(host, 'Ada')
+ghostArtist = addPlayer(ghostArtist, guest, 'Bob') as StoredRoom
+ghostArtist = unwrap(
+  applyMessage(ghostArtist, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+ghostArtist = {
+  ...ghostArtist,
+  phase: 'picking',
+  artistId: guest,
+  artistIndex: 1,
+  players: {
+    ...ghostArtist.players,
+    [guest]: { ...ghostArtist.players[guest], seenAt: Date.now() - 90_000 },
+  },
+}
+const skippedGhost = skipStaleArtist(ghostArtist)
+assert(skippedGhost.artistId === host, `ghost artist should be skipped, got ${skippedGhost.artistId}`)
+assert(skippedGhost.phase === 'picking', 'skipping a ghost should deal the next artist a prompt')
+
 const now = 2_000_000
 assert(
   turnRemainingSeconds({
@@ -390,6 +439,16 @@ assert(
     localStartedMs: now,
   }) === 90,
   'a skewed clock must not show a 9-minute timer',
+)
+assert(
+  turnElapsedMs({
+    drawStartedMs: now + 8 * 60_000,
+    deadlineMs: now + 8 * 60_000 + 90_000,
+    turnSeconds: 90,
+    now,
+    localStartedMs: now - 20_000,
+  }) === 20_000,
+  'skewed clocks should use the local turn clock for guess times',
 )
 assert(
   turnRemainingSeconds({

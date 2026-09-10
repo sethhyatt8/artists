@@ -12,6 +12,7 @@ import {
   playerRecord,
   roomPatch,
   sameDrawTurn,
+  skipStaleArtist,
   staleGuestIds,
   toFirebaseRoom,
   toRoomState,
@@ -27,12 +28,21 @@ export type RoomSession = {
   characterId?: string
 }
 
-function tabId() {
-  const key = 'artists-tab-id'
-  const existing = sessionStorage.getItem(key)
-  if (existing) return existing
-  const id = crypto.randomUUID()
-  sessionStorage.setItem(key, id)
+function seatId(roomCode: string) {
+  const key = `artists-seat:${roomCode}`
+  try {
+    const saved = localStorage.getItem(key)
+    if (saved) return saved
+  } catch {
+    // Private browsing can block localStorage.
+  }
+  const existing = sessionStorage.getItem('artists-tab-id')
+  const id = existing || crypto.randomUUID()
+  try {
+    localStorage.setItem(key, id)
+  } catch {
+    sessionStorage.setItem('artists-tab-id', id)
+  }
   return id
 }
 
@@ -46,7 +56,7 @@ export function useGameRoom(session: RoomSession) {
   const [status, setStatus] = useState<'connecting' | 'open' | 'closed'>(
     'connecting',
   )
-  const selfId = useRef(tabId())
+  const selfId = useRef(seatId(session.roomCode))
   const sessionRef = useRef(session)
   const latestState = useRef<RoomState | null>(null)
   const latestRoom = useRef<StoredRoom | null>(null)
@@ -60,7 +70,8 @@ export function useGameRoom(session: RoomSession) {
     }
 
     const code = session.roomCode
-    const id = selfId.current
+    const id = seatId(code)
+    selfId.current = id
     const name = sanitizeName(session.name)
     const characterId = sanitizeCharacterId(session.characterId) ?? null
     const path = `rooms/${code}`
@@ -126,6 +137,18 @@ export function useGameRoom(session: RoomSession) {
       void rtdbSet(`${path}/players/${id}/seenAt`, Date.now())
       const room = latestRoom.current
       if (!room) return
+      if (room.phase === 'picking' && (room.createdBy === id || room.hostId === id)) {
+        const skipped = skipStaleArtist(room)
+        if (skipped !== room) {
+          void rtdbTransaction(path, (current) => {
+            const latest = normalizeStoredRoom(current)
+            if (!latest) return undefined
+            const next = skipStaleArtist(latest)
+            if (next === latest) return undefined
+            return toFirebaseRoom(next)
+          })
+        }
+      }
       if (room.phase !== 'lobby') return
       for (const staleId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${staleId}`, null)
@@ -136,7 +159,10 @@ export function useGameRoom(session: RoomSession) {
       stopped = true
       stopListen()
       window.clearInterval(heartbeat)
-      void rtdbSet(`${path}/players/${id}`, null)
+      const phase = latestRoom.current?.phase
+      if (!phase || phase === 'lobby') {
+        void rtdbSet(`${path}/players/${id}`, null)
+      }
     }
   }, [session.intent, session.name, session.roomCode, session.characterId])
 

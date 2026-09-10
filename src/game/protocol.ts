@@ -116,6 +116,7 @@ export type RoomState = {
   favorites: RankedCollage[]
   guessChampion: GuessChampion | null
   cue: RoomCue | null
+  seatedIds: string[]
 }
 
 export type ClientMessage =
@@ -123,7 +124,7 @@ export type ClientMessage =
   | { type: 'settings'; settings: GameSettings }
   | { type: 'pick'; category: string; prompt: string }
   | { type: 'canvas'; pieces: CollagePiece[] }
-  | { type: 'guess'; text: string }
+  | { type: 'guess'; text: string; elapsedMs?: number }
   | { type: 'timesUp' }
   | { type: 'nextTurn' }
   | { type: 'vote'; ranks: string[] }
@@ -176,7 +177,15 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
       }
     }
     if (parsed.type === 'guess' && typeof parsed.text === 'string') {
-      return { type: 'guess', text: parsed.text.slice(0, MAX_GUESS_LENGTH) }
+      const elapsedMs =
+        typeof parsed.elapsedMs === 'number' && Number.isFinite(parsed.elapsedMs)
+          ? Math.min(305_000, Math.max(1, Math.round(parsed.elapsedMs)))
+          : undefined
+      return {
+        type: 'guess',
+        text: parsed.text.slice(0, MAX_GUESS_LENGTH),
+        ...(elapsedMs ? { elapsedMs } : {}),
+      }
     }
     if (parsed.type === 'vote' && Array.isArray(parsed.ranks)) {
       const ranks: string[] = []

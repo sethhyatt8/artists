@@ -20,7 +20,7 @@ import {
   type ShapeSet,
 } from '../game/protocol'
 import { useGameRoom, type RoomSession } from '../game/useGameRoom'
-import { formatGuessMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
+import { formatGuessMs, turnElapsedMs, turnRemainingSeconds, turnSolveRows } from '../game/roomLogic'
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { GuessBurst } from '../components/GuessBurst'
 import { LocalCues } from '../components/LocalCues'
@@ -119,7 +119,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       const current = stateRef.current
       if (!current || current.phase !== 'drawing') return
       if (timesUpSent.current || drawingSince.current == null) return
-      const guessers = current.players.filter((player) => player.id !== current.artistId)
+      const seated = new Set(current.seatedIds)
+      const guessers = current.players.filter(
+        (player) => seated.has(player.id) && player.id !== current.artistId,
+      )
       const allGotIt =
         guessers.length > 0 &&
         guessers.every((player) =>
@@ -168,8 +171,17 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   function sendGuess(event: FormEvent) {
     event.preventDefault()
     const text = guessText.trim()
-    if (!text) return
-    send({ type: 'guess', text })
+    if (!text || !state) return
+    send({
+      type: 'guess',
+      text,
+      elapsedMs: turnElapsedMs({
+        drawStartedMs: state.drawStartedMs,
+        deadlineMs: state.deadlineMs,
+        turnSeconds: state.settings.turnSeconds,
+        localStartedMs: drawingSince.current,
+      }),
+    })
     setGuessText('')
   }
 
@@ -1019,12 +1031,8 @@ function placeLabel(place: number) {
 }
 
 function nextArtistName(state: RoomState) {
-  const ids = state.players.map((player) => player.id)
-  const creator = state.createdBy
   const order =
-    creator && ids.includes(creator)
-      ? [creator, ...ids.filter((id) => id !== creator).sort()]
-      : [...ids].sort()
+    state.seatedIds.length > 0 ? state.seatedIds : state.players.map((player) => player.id)
   if (order.length === 0) return 'the other player'
   const current = state.artistId ? order.indexOf(state.artistId) : -1
   const nextId = order[(current + 1) % order.length]
