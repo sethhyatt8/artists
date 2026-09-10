@@ -357,7 +357,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     room.phase === 'voting' ||
     room.phase === 'finale'
   const showOptions = isArtist && room.phase === 'picking'
-  const hostId = room.createdBy ?? room.hostId
+  const hostId = roomControllerId(room)
   const players = Object.values(room.players).sort((a, b) => {
     if (a.id === hostId) return -1
     if (b.id === hostId) return 1
@@ -371,7 +371,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     phase: room.phase,
     selfId,
     hostId,
-    createdBy: room.createdBy,
+    createdBy: hostId,
     players,
     artistId: room.artistId,
     artistName: artist?.name ?? null,
@@ -437,14 +437,28 @@ export function seatedPlayerIds(room: StoredRoom) {
   return rotationOrder(room)
 }
 
-function rotationOrder(room: StoredRoom) {
-  const present = Object.keys(room.players)
+function seatedOrder(players: Record<string, Player>, order: string[], includeExtras: boolean) {
+  const present = Object.keys(players)
   const presentSet = new Set(present)
-  const seated = (room.order ?? []).filter((id) => presentSet.has(id))
-  const ids = seated.length > 0 ? seated : present
+  const seated = order.filter((id) => presentSet.has(id))
+  if (!includeExtras) {
+    return seated.length > 0 ? seated : present
+  }
+  const extras = present.filter((id) => !seated.includes(id))
+  return [...seated, ...extras]
+}
+
+function rotationOrder(room: StoredRoom) {
+  const ids = seatedOrder(room.players, room.order ?? [], room.phase === 'lobby')
   const creator = room.createdBy && ids.includes(room.createdBy) ? room.createdBy : null
   if (!creator) return ids
   return [creator, ...ids.filter((id) => id !== creator)]
+}
+
+export function roomControllerId(room: StoredRoom): string | null {
+  const marked = room.createdBy ?? room.hostId
+  if (marked && room.players[marked]) return marked
+  return rotationOrder(room)[0] ?? marked ?? null
 }
 
 function nextArtistIndex(room: StoredRoom) {
@@ -461,7 +475,7 @@ function pinnedHost(room: StoredRoom): StoredRoom {
 }
 
 function isController(room: StoredRoom, senderId: string) {
-  return senderId === room.createdBy || senderId === room.hostId
+  return senderId === roomControllerId(room)
 }
 
 function isPresentPlayer(player: Player, now: number) {
@@ -791,6 +805,7 @@ function reclaimPlayer(
   name: string,
   characterId?: string | null,
 ): StoredRoom | null {
+  if (room.phase === 'lobby') return null
   const want = sanitizeName(name)
   const now = Date.now()
   const matchId = Object.keys(room.players).find((pid) => {

@@ -74,8 +74,10 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const timesUpSent = useRef(false)
 
   const connectionId = state?.selfId ?? ''
-  const isHost = session.intent === 'create'
-  const showCueButton = isCueBoardComputer(session)
+  const isHost = Boolean(
+    state && (state.selfId === state.createdBy || state.selfId === state.hostId),
+  )
+  const showCueButton = isHost || isCueBoardComputer(session)
   const isArtist = Boolean(state && state.artistId === connectionId)
   const seconds = useTurnCountdown(state)
   const winnerName =
@@ -106,13 +108,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   }
 
   useEffect(() => {
-    if (session.intent !== 'create') return
+    if (!isHost) return
     try {
       localStorage.setItem(cueBoardStorageKey(session.roomCode), '1')
     } catch {
       // Private browsing can block localStorage; the create-session still shows the button.
     }
-  }, [session.intent, session.roomCode])
+  }, [isHost, session.roomCode])
 
   useEffect(() => {
     if (!showCueButton || !state?.usedPrompts?.length) return

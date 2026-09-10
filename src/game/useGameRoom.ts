@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isFirebaseConfigured, rtdbGet, rtdbListen, rtdbPatch, rtdbSet, rtdbTransaction } from './rtdb'
 import {
   applyMessage,
-  claimSeat,
+  emptyRoom,
   ensureSeated,
   finishTurnIfGuessersDone,
   isSpuriousDrawEnd,
   mergeGuessLists,
   normalizeStoredRoom,
+  playerRecord,
   roomPatch,
   sameDrawTurn,
   skipStaleArtist,
@@ -16,7 +17,7 @@ import {
   toRoomState,
   type StoredRoom,
 } from './roomLogic'
-import { sanitizeName, type ClientMessage, type RoomState } from './protocol'
+import { MAX_PLAYERS, sanitizeName, type ClientMessage, type RoomState } from './protocol'
 import { sanitizeCharacterId } from './characters'
 
 export type RoomSession = {
@@ -74,6 +75,56 @@ export function useGameRoom(session: RoomSession) {
     const characterId = sanitizeCharacterId(session.characterId) ?? null
     const path = `rooms/${code}`
     let stopped = false
+    let sitting = false
+
+    function publish(room: StoredRoom) {
+      latestRoom.current = room
+      latestState.current = toRoomState(room, id, code)
+      setState(latestState.current)
+    }
+
+    async function sitDown(): Promise<'ok' | 'missing' | 'full'> {
+      const { data } = await rtdbGet(path)
+      const room = normalizeStoredRoom(data)
+      if (!room) {
+        if (session.intent !== 'create') return 'missing'
+        const created = emptyRoom(id, name, characterId)
+        const response = await rtdbSet(path, toFirebaseRoom(created))
+        if (!response.ok) throw new Error(`Firebase write failed (${response.status})`)
+        if (!stopped) publish(created)
+        return 'ok'
+      }
+      if (!room.players[id] && Object.keys(room.players).length >= MAX_PLAYERS) {
+        return 'full'
+      }
+      const mine = room.players[id]
+        ? {
+            ...room.players[id],
+            name,
+            seenAt: Date.now(),
+            characterId: characterId || room.players[id].characterId,
+          }
+        : playerRecord(id, name, 0, characterId)
+      const response = await rtdbSet(`${path}/players/${id}`, mine)
+      if (!response.ok) throw new Error(`Firebase write failed (${response.status})`)
+      if (!stopped) {
+        publish({
+          ...room,
+          players: { ...room.players, [id]: mine },
+        })
+      }
+      return 'ok'
+    }
+
+    function reseat() {
+      if (sitting || stopped) return
+      sitting = true
+      void sitDown()
+        .catch(() => undefined)
+        .finally(() => {
+          sitting = false
+        })
+    }
 
     const stopListen = rtdbListen(path, (data) => {
       const room = normalizeStoredRoom(data)
@@ -89,41 +140,22 @@ export function useGameRoom(session: RoomSession) {
           guesses: mergeGuessLists(latestRoom.current.guesses, room.guesses),
         }
       }
-      latestRoom.current = visible
-      latestState.current = toRoomState(visible, id, code)
-      setState(latestState.current)
+      publish(visible)
       if (!room.players[id] && (room.phase === 'lobby' || session.intent === 'create')) {
-        void reseat()
+        reseat()
       }
     })
 
-    function reseat() {
-      return rtdbTransaction(path, (current) => {
-        const room = normalizeStoredRoom(current)
-        const next = claimSeat(room, id, name, characterId, session.intent)
-        if (next == null || typeof next === 'string') return undefined
-        if (room && JSON.stringify(room.players) === JSON.stringify(next.players)) {
-          return undefined
-        }
-        return toFirebaseRoom(next)
-      })
-    }
-
-    void rtdbTransaction(path, (current) => {
-      const room = normalizeStoredRoom(current)
-      const next = claimSeat(room, id, name, characterId, session.intent)
-      if (next == null || typeof next === 'string') return undefined
-      return toFirebaseRoom(next)
-    })
+    void sitDown()
       .then((result) => {
         if (stopped) return
-        if (!result.committed) {
-          const existing = normalizeStoredRoom(result.snapshot)
-          setError(
-            session.intent === 'join' && !existing
-              ? 'Room not found. Check the code, or create a room.'
-              : 'This room is full (6 players).',
-          )
+        if (result === 'missing') {
+          setError('Room not found. Check the code, or create a room.')
+          setStatus('closed')
+          return
+        }
+        if (result === 'full') {
+          setError('This room is full (6 players).')
           setStatus('closed')
           return
         }
@@ -142,7 +174,7 @@ export function useGameRoom(session: RoomSession) {
       if (me) {
         void rtdbSet(`${path}/players/${id}`, { ...me, seenAt: Date.now() })
       } else {
-        void reseat()
+        reseat()
       }
       if (!room) return
       if (room.phase === 'picking' && (room.createdBy === id || room.hostId === id)) {
@@ -158,6 +190,14 @@ export function useGameRoom(session: RoomSession) {
         }
       }
       if (room.phase !== 'lobby') return
+      const marked = room.createdBy ?? room.hostId
+      if (!marked || !room.players[marked]) {
+        const first = Object.keys(room.players)[0]
+        if (first === id) {
+          void rtdbSet(`${path}/createdBy`, id)
+          void rtdbSet(`${path}/hostId`, id)
+        }
+      }
       if (Date.now() - connectedAt < 12_000) return
       for (const staleId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${staleId}`, null)

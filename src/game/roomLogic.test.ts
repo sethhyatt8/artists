@@ -19,6 +19,7 @@ import {
   isSpuriousDrawEnd,
   mergeGuessLists,
   normalizeStoredRoom,
+  playerRecord,
   roomPatch,
   seatedPlayerIds,
   skipStaleArtist,
@@ -63,6 +64,74 @@ const hostBack = claimSeat(orphaned, host, 'Ada', null, 'create')
 assert(typeof hostBack !== 'string' && hostBack, 'creating again should sit back down in the existing room')
 assert(hostBack.players[host], 'the host should be seated')
 assert(hostBack.usedPrompts.includes('pizza'), 'recreating must not wipe the existing room')
+
+const twoSeats = claimSeat(emptyRoom(host, 'Ada'), guest, 'Bob', null, 'join')
+assert(typeof twoSeats !== 'string' && twoSeats, 'a second player should join the host lobby')
+assert(twoSeats.players[host] && twoSeats.players[guest], 'join must keep the host and the kid')
+
+const liveTwin = addPlayer(room, 'guest-ccc', 'Bob')
+assert(
+  typeof liveTwin !== 'string' && liveTwin.players[guest] && liveTwin.players['guest-ccc'],
+  'lobby must not steal a live same-name seat',
+)
+
+const staleNameLobby: StoredRoom = {
+  ...emptyRoom(host, 'Ada'),
+  players: {
+    [host]: playerRecord(host, 'Ada'),
+    stale: { id: 'stale', name: 'Bob', score: 0, seenAt: Date.now() - 120_000 },
+  },
+  order: [host, 'stale'],
+}
+const lobbyNoSteal = addPlayer(staleNameLobby, guest, 'Bob')
+assert(
+  typeof lobbyNoSteal !== 'string' && lobbyNoSteal.players[guest] && lobbyNoSteal.players.stale,
+  'lobby should add a new seat instead of taking a stale name',
+)
+const drawingSteal = addPlayer({ ...staleNameLobby, phase: 'drawing' }, guest, 'Bob')
+assert(
+  typeof drawingSteal !== 'string' && drawingSteal.players[guest] && !drawingSteal.players.stale,
+  'mid-game reconnect may reclaim a stale same-name seat',
+)
+
+const orderlessJoin = normalizeStoredRoom({
+  ...toFirebaseRoom(emptyRoom(host, 'Ada')),
+  players: {
+    [host]: playerRecord(host, 'Ada'),
+    [guest]: playerRecord(guest, 'Bob'),
+  },
+  order: [host],
+})
+assert(orderlessJoin, 'a room with an extra player node should still parse')
+assert(
+  seatedPlayerIds(orderlessJoin).includes(guest),
+  'a player written without updating order still counts as seated',
+)
+assert(toRoomState(orderlessJoin, host, 'TEST').players.length === 2, 'lobby should show both seats')
+
+const creatorMissing: StoredRoom = {
+  ...emptyRoom(host, 'Ada'),
+  createdBy: host,
+  hostId: host,
+  players: {
+    [guest]: playerRecord(guest, 'Bob'),
+    extra: playerRecord('extra', 'Cam'),
+  },
+  order: [guest, 'extra'],
+}
+const startedBySeated = applyMessage(creatorMissing, guest, {
+  type: 'start',
+  settings: { ...DEFAULT_SETTINGS, rounds: 2 },
+})
+assert(
+  !('error' in startedBySeated) && startedBySeated.phase === 'picking',
+  'if the creator seat is gone, a seated player can start',
+)
+const joinedController = toRoomState(creatorMissing, guest, 'TEST')
+assert(
+  joinedController.selfId === joinedController.createdBy,
+  'the remaining seated player should be treated as host even after a join',
+)
 
 const hostMissing = { ...room, players: { [guest]: room.players[guest] } }
 const seatedHost = ensureSeated(hostMissing, host, 'Ada', null)

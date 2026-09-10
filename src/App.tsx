@@ -20,9 +20,28 @@ function readCelebrationsFromUrl() {
   return new URLSearchParams(window.location.search).has('celebrations')
 }
 
+function readSavedSession(code: string): RoomSession | null {
+  if (!code) return null
+  try {
+    const name = localStorage.getItem('artists-name')
+    const seat = localStorage.getItem(`artists-seat:${code}`)
+    if (!name || !seat) return null
+    const characterId = localStorage.getItem('artists-character-id') ?? undefined
+    const created = localStorage.getItem(`artists-cue-board:${code}`) === '1'
+    return {
+      roomCode: code,
+      name,
+      characterId: characterId || undefined,
+      intent: created ? 'create' : 'join',
+    }
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
   const initialCode = useMemo(() => readRoomFromUrl(), [])
-  const [session, setSession] = useState<RoomSession | null>(null)
+  const [session, setSession] = useState<RoomSession | null>(() => readSavedSession(initialCode))
   const [practice, setPractice] = useState(() => readPracticeFromUrl() && !initialCode)
   const [celebrations, setCelebrations] = useState(
     () => readCelebrationsFromUrl() && !initialCode,

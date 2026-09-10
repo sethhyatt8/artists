@@ -1,4 +1,5 @@
 const databaseURL = (import.meta.env.VITE_FIREBASE_DATABASE_URL ?? '').replace(/\/$/, '')
+const LISTEN_POLL_MS = 1000
 
 export function isFirebaseConfigured() {
   return databaseURL.length > 0
@@ -9,10 +10,25 @@ function urlFor(path: string) {
   return `${databaseURL}/${clean}.json`
 }
 
+function fetchInit(init: RequestInit = {}): RequestInit {
+  return {
+    ...init,
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+      ...(init.headers as Record<string, string> | undefined),
+    },
+  }
+}
+
 export async function rtdbGet(path: string): Promise<{ data: unknown; etag: string | null }> {
-  const response = await fetch(urlFor(path), {
-    headers: { 'X-Firebase-ETag': 'true' },
-  })
+  const response = await fetch(
+    urlFor(path),
+    fetchInit({
+      headers: { 'X-Firebase-ETag': 'true' },
+    }),
+  )
   if (!response.ok) {
     throw new Error(`Firebase read failed (${response.status})`)
   }
@@ -25,20 +41,26 @@ export async function rtdbGet(path: string): Promise<{ data: unknown; etag: stri
 export async function rtdbSet(path: string, data: unknown, etag?: string | null) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (etag) headers['if-match'] = etag
-  const response = await fetch(urlFor(path), {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(data),
-  })
+  const response = await fetch(
+    urlFor(path),
+    fetchInit({
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+    }),
+  )
   return response
 }
 
 export async function rtdbPatch(path: string, data: unknown) {
-  const response = await fetch(urlFor(path), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
+  const response = await fetch(
+    urlFor(path),
+    fetchInit({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  )
   return response
 }
 
@@ -61,32 +83,53 @@ export async function rtdbTransaction<T>(
 }
 
 export function rtdbListen(path: string, onData: (data: unknown) => void): () => void {
-  const source = new EventSource(urlFor(path))
   let stopped = false
   let timer: number | null = null
+  let source: EventSource | null = null
+
+  function emit(data: unknown) {
+    if (!stopped) onData(data)
+  }
 
   function refresh() {
     if (stopped || timer !== null) return
     timer = window.setTimeout(() => {
       timer = null
       void rtdbGet(path)
-        .then(({ data }) => {
-          if (!stopped) onData(data)
-        })
+        .then(({ data }) => emit(data))
         .catch(() => undefined)
     }, 40)
   }
 
-  source.addEventListener('put', refresh)
+  function onPut(event: Event) {
+    try {
+      const parsed = JSON.parse((event as MessageEvent).data) as {
+        path?: string
+        data?: unknown
+      }
+      if (parsed.path === '/' || parsed.path === '') {
+        emit(parsed.data ?? null)
+        return
+      }
+    } catch {
+      // Fall through to a full GET when the stream payload is nested or malformed.
+    }
+    refresh()
+  }
+
+  source = new EventSource(urlFor(path))
+  source.addEventListener('put', onPut)
   source.addEventListener('patch', refresh)
   source.onerror = () => {
-    // EventSource retries automatically.
+    refresh()
   }
   refresh()
+  const poll = window.setInterval(refresh, LISTEN_POLL_MS)
 
   return () => {
     stopped = true
     if (timer !== null) window.clearTimeout(timer)
-    source.close()
+    window.clearInterval(poll)
+    source?.close()
   }
 }
