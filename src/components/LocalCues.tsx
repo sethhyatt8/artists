@@ -46,10 +46,13 @@ export function LocalCues({
   }, [cue?.at, cue?.kind, cue?.seconds, cue?.name])
 
   useEffect(() => {
-    if (!showButton || quietLeft <= 0) return
-    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    if (!showButton) return
+    const tick = () => setNow(Date.now())
+    tick()
+    if (typeof quietUntil !== 'number' || quietUntil <= Date.now()) return
+    const timer = window.setInterval(tick, 250)
     return () => window.clearInterval(timer)
-  }, [showButton, quietLeft])
+  }, [showButton, quietUntil])
 
   function flash(next: string) {
     setStamp(next)
