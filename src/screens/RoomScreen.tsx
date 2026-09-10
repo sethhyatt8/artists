@@ -546,32 +546,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         </button>
       </header>
 
-      <ScoreList
-        players={state.players}
-        connectionId={connectionId}
-        hostId={state.createdBy ?? state.hostId}
-      />
-
-      <section className="panel">
-        <h2>Game settings</h2>
-        {isHost ? (
-          <LobbySettings
-            settings={state.settings}
-            onChange={(settings) => send({ type: 'settings', settings })}
-          />
-        ) : (
-          <p>
-            {shapeSetsLabel(state.settings.shapeSets)}
-            {' · '}
-            {formatTurnLength(state.settings.turnSeconds)}
-            {' · '}
-            {state.settings.rounds} {state.settings.rounds === 1 ? 'round' : 'rounds'}
-          </p>
-        )}
-      </section>
-
       <section className="panel">
         <h2>Lobby</h2>
+        <ScoreList
+          players={state.players}
+          connectionId={connectionId}
+          hostId={state.createdBy ?? state.hostId}
+        />
         <p>
           {state.players.length} of {MAX_PLAYERS} players. Need at least two
           players.
@@ -594,6 +575,24 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           </button>
         ) : (
           <p className="hint">Waiting for the host to start.</p>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Game settings</h2>
+        {isHost ? (
+          <LobbySettings
+            settings={state.settings}
+            onChange={(settings) => send({ type: 'settings', settings })}
+          />
+        ) : (
+          <p>
+            {shapeSetsLabel(state.settings.shapeSets)}
+            {' · '}
+            {formatTurnLength(state.settings.turnSeconds)}
+            {' · '}
+            {state.settings.rounds} {state.settings.rounds === 1 ? 'round' : 'rounds'}
+          </p>
         )}
       </section>
 

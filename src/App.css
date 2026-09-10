@@ -110,6 +110,10 @@
   background: var(--bg-raise);
 }
 
+.panel .player-list {
+  margin-bottom: 12px;
+}
+
 .player-list li {
   display: flex;
   justify-content: space-between;
