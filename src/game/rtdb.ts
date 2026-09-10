@@ -85,40 +85,21 @@ export async function rtdbTransaction<T>(
 export function rtdbListen(path: string, onData: (data: unknown) => void): () => void {
   let stopped = false
   let timer: number | null = null
-  let source: EventSource | null = null
-
-  function emit(data: unknown) {
-    if (!stopped) onData(data)
-  }
+  const source = new EventSource(urlFor(path))
 
   function refresh() {
     if (stopped || timer !== null) return
     timer = window.setTimeout(() => {
       timer = null
       void rtdbGet(path)
-        .then(({ data }) => emit(data))
+        .then(({ data }) => {
+          if (!stopped) onData(data)
+        })
         .catch(() => undefined)
     }, 40)
   }
 
-  function onPut(event: Event) {
-    try {
-      const parsed = JSON.parse((event as MessageEvent).data) as {
-        path?: string
-        data?: unknown
-      }
-      if (parsed.path === '/' || parsed.path === '') {
-        emit(parsed.data ?? null)
-        return
-      }
-    } catch {
-      // Fall through to a full GET when the stream payload is nested or malformed.
-    }
-    refresh()
-  }
-
-  source = new EventSource(urlFor(path))
-  source.addEventListener('put', onPut)
+  source.addEventListener('put', refresh)
   source.addEventListener('patch', refresh)
   source.onerror = () => {
     refresh()
@@ -130,6 +111,6 @@ export function rtdbListen(path: string, onData: (data: unknown) => void): () =>
     stopped = true
     if (timer !== null) window.clearTimeout(timer)
     window.clearInterval(poll)
-    source?.close()
+    source.close()
   }
 }

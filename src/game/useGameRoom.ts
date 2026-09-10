@@ -83,13 +83,15 @@ export function useGameRoom(session: RoomSession) {
       setState(latestState.current)
     }
 
-    async function sitDown(): Promise<'ok' | 'missing' | 'full'> {
-      const { data } = await rtdbGet(path)
+    async function sitDown(allowCreate: boolean): Promise<'ok' | 'missing' | 'full'> {
+      const { data, etag } = await rtdbGet(path)
       const room = normalizeStoredRoom(data)
       if (!room) {
-        if (session.intent !== 'create') return 'missing'
+        if (data != null) return 'missing'
+        if (!allowCreate || session.intent !== 'create') return 'missing'
         const created = emptyRoom(id, name, characterId)
-        const response = await rtdbSet(path, toFirebaseRoom(created))
+        const response = await rtdbSet(path, toFirebaseRoom(created), etag)
+        if (response.status === 412) return sitDown(false)
         if (!response.ok) throw new Error(`Firebase write failed (${response.status})`)
         if (!stopped) publish(created)
         return 'ok'
@@ -119,7 +121,7 @@ export function useGameRoom(session: RoomSession) {
     function reseat() {
       if (sitting || stopped) return
       sitting = true
-      void sitDown()
+      void sitDown(false)
         .catch(() => undefined)
         .finally(() => {
           sitting = false
@@ -141,12 +143,12 @@ export function useGameRoom(session: RoomSession) {
         }
       }
       publish(visible)
-      if (!room.players[id] && (room.phase === 'lobby' || session.intent === 'create')) {
+      if (!room.players[id] && room.phase === 'lobby') {
         reseat()
       }
     })
 
-    void sitDown()
+    void sitDown(session.intent === 'create')
       .then((result) => {
         if (stopped) return
         if (result === 'missing') {
@@ -173,7 +175,7 @@ export function useGameRoom(session: RoomSession) {
       const me = room?.players[id]
       if (me) {
         void rtdbSet(`${path}/players/${id}`, { ...me, seenAt: Date.now() })
-      } else {
+      } else if (room?.phase === 'lobby') {
         reseat()
       }
       if (!room) return
@@ -190,14 +192,6 @@ export function useGameRoom(session: RoomSession) {
         }
       }
       if (room.phase !== 'lobby') return
-      const marked = room.createdBy ?? room.hostId
-      if (!marked || !room.players[marked]) {
-        const first = Object.keys(room.players)[0]
-        if (first === id) {
-          void rtdbSet(`${path}/createdBy`, id)
-          void rtdbSet(`${path}/hostId`, id)
-        }
-      }
       if (Date.now() - connectedAt < 12_000) return
       for (const staleId of staleGuestIds(room, id)) {
         void rtdbSet(`${path}/players/${staleId}`, null)

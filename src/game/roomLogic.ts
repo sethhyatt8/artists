@@ -357,7 +357,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     room.phase === 'voting' ||
     room.phase === 'finale'
   const showOptions = isArtist && room.phase === 'picking'
-  const hostId = roomControllerId(room)
+  const hostId = room.createdBy ?? room.hostId
   const players = Object.values(room.players).sort((a, b) => {
     if (a.id === hostId) return -1
     if (b.id === hostId) return 1
@@ -371,7 +371,7 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     phase: room.phase,
     selfId,
     hostId,
-    createdBy: hostId,
+    createdBy: room.createdBy,
     players,
     artistId: room.artistId,
     artistName: artist?.name ?? null,
@@ -455,12 +455,6 @@ function rotationOrder(room: StoredRoom) {
   return [creator, ...ids.filter((id) => id !== creator)]
 }
 
-export function roomControllerId(room: StoredRoom): string | null {
-  const marked = room.createdBy ?? room.hostId
-  if (marked && room.players[marked]) return marked
-  return rotationOrder(room)[0] ?? marked ?? null
-}
-
 function nextArtistIndex(room: StoredRoom) {
   const order = rotationOrder(room)
   if (order.length === 0) return 0
@@ -475,7 +469,7 @@ function pinnedHost(room: StoredRoom): StoredRoom {
 }
 
 function isController(room: StoredRoom, senderId: string) {
-  return senderId === roomControllerId(room)
+  return senderId === room.createdBy || senderId === room.hostId
 }
 
 function isPresentPlayer(player: Player, now: number) {

@@ -124,13 +124,13 @@ const startedBySeated = applyMessage(creatorMissing, guest, {
   settings: { ...DEFAULT_SETTINGS, rounds: 2 },
 })
 assert(
-  !('error' in startedBySeated) && startedBySeated.phase === 'picking',
-  'if the creator seat is gone, a seated player can start',
+  !('error' in startedBySeated) && startedBySeated.phase === 'lobby',
+  'a joining player must not take the host controls',
 )
 const joinedController = toRoomState(creatorMissing, guest, 'TEST')
 assert(
-  joinedController.selfId === joinedController.createdBy,
-  'the remaining seated player should be treated as host even after a join',
+  joinedController.selfId !== joinedController.createdBy,
+  'the original creator stays the host after someone else joins',
 )
 
 const hostMissing = { ...room, players: { [guest]: room.players[guest] } }
