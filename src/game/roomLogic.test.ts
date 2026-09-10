@@ -1,10 +1,12 @@
 import { CHARACTERS } from './characters'
 import { DEFAULT_SETTINGS, sanitizeGameSettings } from './protocol'
 import {
+  CATEGORIES,
   CATEGORIES_PER_DEAL,
   PROMPTS_PER_CATEGORY,
   answersMatch,
   dealPromptOptions,
+  guesserHint,
   maskSecret,
   normalizeAnswer,
 } from './prompts'
@@ -587,6 +589,67 @@ const nextDeal = dealPromptOptions(promptRoom.usedPrompts).flatMap((group) => gr
 assert(
   nextDeal.every((prompt) => !firstDeal.includes(prompt)),
   'the next artist should see a fresh set of prompts',
+)
+
+assert((CATEGORIES.Phrases?.length ?? 0) >= 40, 'phrases should be a real extra pile of prompts')
+assert(guesserHint('Phrases', 'Brushing teeth') === 'Phrases', 'phrases should hint the category')
+assert(guesserHint('Movies', 'Up') === 'Movies', 'movie titles should hint even if they are one word')
+assert(guesserHint('Food', 'Ice cream') === 'Food', 'multi-word food should still get a hint')
+assert(guesserHint('Animals', 'Cat') === null, 'easy one-word prompts should not need a hint')
+
+let hinted = emptyRoom(host, 'Ada')
+const hintedGuest = addPlayer(hinted, guest, 'Bob')
+assert(typeof hintedGuest !== 'string', 'hint join should work')
+hinted = unwrap(
+  applyMessage(hintedGuest, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+  }),
+)
+hinted = {
+  ...hinted,
+  options: [{ category: 'Phrases', prompts: ['Brushing teeth'] }],
+}
+hinted = unwrap(
+  applyMessage(hinted, host, { type: 'pick', category: 'Phrases', prompt: 'Brushing teeth' }),
+)
+assert(hinted.promptCategory === 'Phrases', 'pick should remember the category')
+const guesserHintView = toRoomState(hinted, guest, 'TEST')
+assert(guesserHintView.prompt === null, 'guesser still must not see the phrase')
+assert(guesserHintView.promptHint === 'Phrases', 'guesser should see a Phrases hint')
+const artistHintView = toRoomState(hinted, host, 'TEST')
+assert(artistHintView.prompt === 'Brushing teeth', 'artist should still see the phrase')
+assert(artistHintView.promptHint === 'Phrases', 'artist can see the same category chip')
+
+const afterLobby = unwrap(applyMessage(promptRoom, host, { type: 'backToLobby' }))
+assert(afterLobby.phase === 'lobby', 'host can send the room back to the lobby')
+assert(
+  firstDeal.every((prompt) => afterLobby.usedPrompts.includes(prompt)),
+  'back to lobby should keep the used-prompt memory',
+)
+const secondFromHost = unwrap(
+  applyMessage(afterLobby, host, { type: 'start', settings: { ...DEFAULT_SETTINGS, rounds: 4 } }),
+)
+assert(secondFromHost.phase === 'picking', 'a second game should start picking')
+const secondDeal = secondFromHost.options?.flatMap((group) => group.prompts) ?? []
+assert(
+  secondDeal.every((prompt) => !firstDeal.includes(prompt)),
+  'a second game in the same room should skip prompts already offered',
+)
+
+const rememberedJoined = addPlayer(emptyRoom(host, 'Ada'), guest, 'Bob')
+assert(typeof rememberedJoined !== 'string', 'remember join should work')
+const rememberedGame = unwrap(
+  applyMessage(rememberedJoined, host, {
+    type: 'start',
+    settings: { ...DEFAULT_SETTINGS, rounds: 4 },
+    usedPrompts: firstDeal,
+  }),
+)
+const rememberedDeal = rememberedGame.options?.flatMap((group) => group.prompts) ?? []
+assert(
+  rememberedDeal.every((prompt) => !firstDeal.includes(prompt)),
+  'the table computer’s remembered prompts should not be re-dealt',
 )
 
 const orderedGuesses = normalizeStoredRoom(

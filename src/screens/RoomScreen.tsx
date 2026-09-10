@@ -31,9 +31,28 @@ type RoomScreenProps = {
 }
 
 const CUE_BOARD_KEY = 'artists-cue-board'
+const USED_PROMPTS_KEY = 'artists-used-prompts'
 
 function cueBoardStorageKey(roomCode: string) {
   return `${CUE_BOARD_KEY}:${roomCode}`
+}
+
+function readRememberedPrompts(): string[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(USED_PROMPTS_KEY) ?? '[]')
+    if (!Array.isArray(raw)) return []
+    return raw.filter((item): item is string => typeof item === 'string').slice(-240)
+  } catch {
+    return []
+  }
+}
+
+function writeRememberedPrompts(prompts: string[]) {
+  try {
+    localStorage.setItem(USED_PROMPTS_KEY, JSON.stringify(prompts.slice(-240)))
+  } catch {
+    /* ignore quota */
+  }
 }
 
 function isCueBoardComputer(session: RoomSession) {
@@ -53,7 +72,6 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const canvasTimer = useRef<number | null>(null)
   const latestPieces = useRef<CollagePiece[]>([])
   const timesUpSent = useRef(false)
-  const lastGuessSent = useRef(0)
 
   const connectionId = state?.selfId ?? ''
   const isHost = session.intent === 'create'
@@ -95,6 +113,11 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
       // Private browsing can block localStorage; the create-session still shows the button.
     }
   }, [session.intent, session.roomCode])
+
+  useEffect(() => {
+    if (!showCueButton || !state?.usedPrompts?.length) return
+    writeRememberedPrompts(state.usedPrompts)
+  }, [showCueButton, state?.usedPrompts])
 
   useEffect(() => {
     if (!copied) return
@@ -188,8 +211,6 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     const now = Date.now()
     if (remainingLockSeconds(state.quietUntil, now) > 0) return
     if (remainingLockSeconds(state.mutedUntil[connectionId], now) > 0) return
-    if (now - lastGuessSent.current < 1200) return
-    lastGuessSent.current = now
     send({
       type: 'guess',
       text,
@@ -247,7 +268,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
         />
         <p className="lede">
           Pick one prompt. The {formatTurnLength(state.settings.turnSeconds)} timer
-          starts as soon as you tap it.
+          starts as soon as you tap it. Phrases and movie titles give guessers a
+          category hint.
         </p>
         <div className="pick-grid">
           {state.options.map((group) => (
@@ -363,6 +385,12 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           {alreadyGotIt
             ? 'You got it! Don’t say the word out loud.'
             : `${state.artistName} is collaging. Type what you think it is.`}
+          {!alreadyGotIt && state.promptHint ? (
+            <>
+              {' '}
+              <span className="prompt-hint">Hint: {state.promptHint}</span>
+            </>
+          ) : null}
           {!alreadyGotIt && guesserCount > 1 ? ` ${solvedCount} of ${guesserCount} guessed it.` : ''}
         </p>
         <div className="practice-body guesser-body">
@@ -546,7 +574,13 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           <button
             className="btn primary"
             type="button"
-            onClick={() => send({ type: 'start', settings: state.settings })}
+            onClick={() =>
+              send({
+                type: 'start',
+                settings: state.settings,
+                usedPrompts: readRememberedPrompts(),
+              })
+            }
             disabled={state.players.length < 2}
           >
             {state.players.length < 2 ? 'Waiting for another player' : 'Start game'}

@@ -19,6 +19,7 @@ import {
 } from './protocol'
 import {
   answersMatch,
+  guesserHint,
   dealPromptOptions,
   maskSecret,
   mergeUsedPrompts,
@@ -63,6 +64,7 @@ export type StoredRoom = {
   cue?: RoomCue | null
   quietUntil?: number | null
   mutedUntil?: Record<string, number>
+  promptCategory?: string | null
 }
 
 export function emptyRoom(
@@ -98,6 +100,7 @@ export function emptyRoom(
     cue: null,
     quietUntil: null,
     mutedUntil: {},
+    promptCategory: null,
   }
 }
 
@@ -332,6 +335,7 @@ export function normalizeStoredRoom(raw: unknown): StoredRoom | null {
     cue: readCue(value.cue),
     quietUntil: typeof value.quietUntil === 'number' ? value.quietUntil : null,
     mutedUntil: readMutedUntil(value.mutedUntil),
+    promptCategory: typeof value.promptCategory === 'string' ? value.promptCategory : null,
   }
 }
 
@@ -394,6 +398,9 @@ export function toRoomState(room: StoredRoom, selfId: string, roomCode: string):
     quietUntil: room.quietUntil ?? null,
     mutedUntil: room.mutedUntil ?? {},
     seatedIds: seated,
+    promptHint:
+      room.phase === 'drawing' ? guesserHint(room.promptCategory, room.prompt) : null,
+    usedPrompts: room.usedPrompts,
   }
 }
 
@@ -691,6 +698,7 @@ const ROOM_KEYS: (keyof StoredRoom)[] = [
   'cue',
   'quietUntil',
   'mutedUntil',
+  'promptCategory',
 ]
 
 export function roomPatch(prev: StoredRoom, next: StoredRoom): Record<string, unknown> {
@@ -853,7 +861,7 @@ export function applyMessage(
       votes: {},
       guessTimes: {},
       drawStartedMs: null,
-      usedPrompts: [],
+      usedPrompts: mergeUsedPrompts(room.usedPrompts, message.usedPrompts ?? []),
       players: Object.fromEntries(
         Object.values(room.players).map((item) => [item.id, { ...item, score: 0 }]),
       ),
@@ -869,6 +877,7 @@ export function applyMessage(
     return {
       ...room,
       prompt: message.prompt,
+      promptCategory: message.category,
       options: null,
       phase: 'drawing',
       deadlineMs: now + room.settings.turnSeconds * 1000,
@@ -1025,6 +1034,7 @@ function beginPick(room: StoredRoom): StoredRoom {
       cue: null,
       quietUntil: null,
       mutedUntil: {},
+      promptCategory: null,
     }
   }
   return clearTurn({ ...room, phase: 'lobby', order })
@@ -1198,9 +1208,9 @@ function clearTurn(room: StoredRoom): StoredRoom {
     votes: {},
     guessTimes: {},
     drawStartedMs: null,
-    usedPrompts: [],
     cue: null,
     quietUntil: null,
     mutedUntil: {},
+    promptCategory: null,
   }
 }

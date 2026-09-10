@@ -127,10 +127,12 @@ export type RoomState = {
   quietUntil: number | null
   mutedUntil: Record<string, number>
   seatedIds: string[]
+  promptHint: string | null
+  usedPrompts: string[]
 }
 
 export type ClientMessage =
-  | { type: 'start'; settings: GameSettings }
+  | { type: 'start'; settings: GameSettings; usedPrompts?: string[] }
   | { type: 'settings'; settings: GameSettings }
   | { type: 'pick'; category: string; prompt: string }
   | { type: 'canvas'; pieces: CollagePiece[] }
@@ -175,8 +177,16 @@ export function parseClientMessage(data: unknown): ClientMessage | null {
     ) {
       return { type: parsed.type }
     }
-    if (parsed.type === 'start' || parsed.type === 'settings') {
-      return { type: parsed.type, settings: sanitizeGameSettings(parsed.settings) }
+    if (parsed.type === 'settings') {
+      return { type: 'settings', settings: sanitizeGameSettings(parsed.settings) }
+    }
+    if (parsed.type === 'start') {
+      const usedPrompts = sanitizeUsedPrompts(parsed.usedPrompts)
+      return {
+        type: 'start',
+        settings: sanitizeGameSettings(parsed.settings),
+        ...(usedPrompts.length > 0 ? { usedPrompts } : {}),
+      }
     }
     if (
       parsed.type === 'pick' &&
@@ -364,6 +374,21 @@ export function shapeSetsLabel(sets: ShapeSet[]) {
   const ordered = SHAPE_SET_ORDER.filter((item) => sets.includes(item))
   if (ordered.length === 0) return labels.weird
   return ordered.map((item) => labels[item]).join(' + ')
+}
+
+export function sanitizeUsedPrompts(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const next: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const trimmed = item.trim().slice(0, 80)
+    if (!trimmed || seen.has(trimmed.toLowerCase())) continue
+    seen.add(trimmed.toLowerCase())
+    next.push(trimmed)
+    if (next.length === 240) break
+  }
+  return next
 }
 
 export function sanitizeGameSettings(raw: unknown): GameSettings {

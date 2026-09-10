@@ -398,11 +398,17 @@
   gap: 8px;
 }
 
-.prompt-choices .btn {
-  width: 100%;
-  text-align: left;
-  padding-left: 16px;
-  padding-right: 16px;
+.prompt-hint {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ember-dim);
+  color: var(--ember);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .guess-feed {

@@ -4,7 +4,7 @@ import { CHARACTERS } from '../game/characters'
 
 const LABELS: Record<string, string> = {
   seth: 'gasp',
-  emily: 'fiery eyes',
+  emily: 'dab',
   harper: 'hair whip',
   jaxon: 'thumbs up',
   eloise: 'big smile',

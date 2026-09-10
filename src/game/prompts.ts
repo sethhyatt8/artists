@@ -324,6 +324,70 @@ export const CATEGORIES: Record<string, string[]> = {
     'Watering',
     'Whistling',
     'Yawning',
+    'Cartwheel',
+    'High five',
+    'Piggyback',
+    'Somersault',
+  ],
+  Phrases: [
+    'Brushing teeth',
+    'Tying shoes',
+    'Walking the dog',
+    'Flying a kite',
+    'Making pizza',
+    'Building a sandcastle',
+    'Catching butterflies',
+    'Blowing bubbles',
+    'Riding a bike',
+    'Baking cookies',
+    'Washing the car',
+    'Raking leaves',
+    'Building a snowman',
+    'Hitting a pinata',
+    'Opening presents',
+    'Roasting marshmallows',
+    'Pitching a tent',
+    'Popping popcorn',
+    'Feeding the ducks',
+    'Catching a fish',
+    'Climbing a tree',
+    'Jumping in puddles',
+    'Blowing out candles',
+    'Walking in space',
+    'Surfing a wave',
+    'Milking a cow',
+    'Mowing the lawn',
+    'Shoveling snow',
+    'Catching fireflies',
+    'Stacking pancakes',
+    'Wrapping a gift',
+    'Hanging ornaments',
+    'Carving a pumpkin',
+    'Skipping rocks',
+    'Flipping pancakes',
+    'Walking the plank',
+    'Rowing a boat',
+    'Flying a plane',
+    'Petting a dinosaur',
+    'Racing a cheetah',
+    'Walking on the moon',
+    'Chasing a tornado',
+    'Slaying a dragon',
+    'Building a fort',
+    'Catching a cold',
+    'Breaking a pinata',
+    'Hunting Easter eggs',
+    'Making a snow angel',
+    'Riding a roller coaster',
+    'Tossing a frisbee',
+    'Juggling oranges',
+    'Painting the house',
+    'Watering flowers',
+    'Walking a tightrope',
+    'Taming a lion',
+    'Sailing a pirate ship',
+    'Landing on Mars',
+    'Hatching a dragon egg',
   ],
   Movies: [
     'Aladdin',
@@ -375,6 +439,29 @@ export const CATEGORIES: Record<string, string[]> = {
     'Wall-E',
     'Willy Wonka',
     'Wonderland',
+    'Bluey',
+    'Cars',
+    'Despicable Me',
+    'Dory',
+    'Dragon',
+    'Elemental',
+    'Inside Out',
+    'Kung Fu Panda',
+    'Luca',
+    'Madagascar',
+    'Minecraft',
+    'Monsters Inc',
+    'Mulan',
+    'Paw Patrol',
+    'Sonic',
+    'Soul',
+    'Turning Red',
+    'Zootopia',
+    'Barbie',
+    'How to Train Your Dragon',
+    'Ice Age',
+    'Lilo and Stitch',
+    'Beauty and the Beast',
   ],
   People: [
     'Astronaut',
@@ -554,6 +641,7 @@ function shuffle<T>(items: T[]) {
 
 export const CATEGORIES_PER_DEAL = 5
 export const PROMPTS_PER_CATEGORY = 5
+export const MAX_USED_PROMPTS = 240
 
 export function dealPromptOptions(used: string[] = []): CategoryOptions[] {
   const usedSet = new Set(used.map(normalizeAnswer))
@@ -605,7 +693,8 @@ export function mergeUsedPrompts(existing: string[], extra: string[]) {
     seen.add(key)
     next.push(prompt)
   }
-  return next
+  if (next.length <= MAX_USED_PROMPTS) return next
+  return next.slice(next.length - MAX_USED_PROMPTS)
 }
 
 export function promptsFromOptions(options: CategoryOptions[]) {
@@ -656,6 +745,13 @@ export function answersMatch(guess: string, prompt: string) {
 
 export function maskSecret(value: string) {
   return value.replace(/[A-Za-z0-9]/g, '*')
+}
+
+export function guesserHint(category: string | null | undefined, prompt: string | null | undefined) {
+  if (!category || !prompt) return null
+  if (category === 'Phrases' || category === 'Movies') return category
+  if (contentWords(prompt).length >= 2) return category
+  return null
 }
 
 export function optionExists(options: CategoryOptions[], category: string, prompt: string) {
