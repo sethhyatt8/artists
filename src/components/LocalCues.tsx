@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { QuietSeconds, RoomCue } from '../game/protocol'
+import type { Player, RoomCue } from '../game/protocol'
 import { remainingLockSeconds } from '../game/roomLogic'
+import { CharacterAvatar } from './CharacterAvatar'
 
 const CUE_MS = 2200
 
@@ -18,22 +19,33 @@ function stampFromCue(cue: RoomCue) {
 export function LocalCues({
   cue,
   quietUntil,
+  mutedUntil,
+  players = [],
+  selfId,
+  artistId,
   onCue,
-  onQuiet,
   onClearGuesses,
+  onMutePlayer,
   showButton,
 }: {
   cue?: RoomCue | null
   quietUntil?: number | null
+  mutedUntil?: Record<string, number>
+  players?: Player[]
+  selfId?: string
+  artistId?: string | null
   onCue: () => void
-  onQuiet: (seconds: QuietSeconds) => void
   onClearGuesses: () => void
+  onMutePlayer?: (playerId: string) => void
   showButton: boolean
 }) {
   const [visible, setVisible] = useState(false)
   const [stamp, setStamp] = useState('NO SPELLING!!!!!')
   const [now, setNow] = useState(() => Date.now())
   const quietLeft = remainingLockSeconds(quietUntil, now)
+  const muteTargets = players.filter(
+    (player) => player.id !== selfId && player.id !== artistId,
+  )
 
   useEffect(() => {
     if (!cue) return
@@ -49,10 +61,12 @@ export function LocalCues({
     if (!showButton) return
     const tick = () => setNow(Date.now())
     tick()
-    if (typeof quietUntil !== 'number' || quietUntil <= Date.now()) return
+    const muteActive = Object.values(mutedUntil ?? {}).some((until) => until > Date.now())
+    const quietActive = typeof quietUntil === 'number' && quietUntil > Date.now()
+    if (!muteActive && !quietActive) return
     const timer = window.setInterval(tick, 250)
     return () => window.clearInterval(timer)
-  }, [showButton, quietUntil])
+  }, [showButton, quietUntil, mutedUntil])
 
   function flash(next: string) {
     setStamp(next)
@@ -63,11 +77,6 @@ export function LocalCues({
   function fireNoSpelling() {
     flash('NO SPELLING!!!!!')
     onCue()
-  }
-
-  function fireQuiet(seconds: QuietSeconds) {
-    flash(seconds === 30 ? 'QUIET 30!!!!!' : 'QUIET!!!!!')
-    onQuiet(seconds)
   }
 
   function fireClear() {
@@ -82,15 +91,32 @@ export function LocalCues({
       {showButton ? (
         <div className="local-cues">
           <p className="local-cues-label">This computer</p>
+          {onMutePlayer && muteTargets.length > 0 ? (
+            <div className="local-cue-people">
+              {muteTargets.map((player) => {
+                const mutedLeft = remainingLockSeconds(mutedUntil?.[player.id], now)
+                return (
+                  <button
+                    key={player.id}
+                    className={mutedLeft > 0 ? 'local-cue-person is-muted' : 'local-cue-person'}
+                    type="button"
+                    disabled={mutedLeft > 0}
+                    onClick={() => onMutePlayer(player.id)}
+                  >
+                    <CharacterAvatar
+                      characterId={player.characterId}
+                      name={player.name}
+                      size={36}
+                    />
+                    <span>{mutedLeft > 0 ? `${mutedLeft}s` : player.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
           <div className="local-cue-row">
             <button className="btn compact local-cue-btn" type="button" onClick={fireNoSpelling}>
               No spelling!!!!!
-            </button>
-            <button className="btn compact local-cue-btn" type="button" onClick={() => fireQuiet(10)}>
-              Quiet 10s
-            </button>
-            <button className="btn compact local-cue-btn" type="button" onClick={() => fireQuiet(30)}>
-              Quiet 30s
             </button>
             <button className="btn compact ghost local-cue-btn" type="button" onClick={fireClear}>
               Clear guesses

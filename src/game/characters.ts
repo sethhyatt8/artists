@@ -11,6 +11,7 @@ export type Character = {
   look: CharacterLook
   portrait?: string
   celebrateFrames?: string[]
+  celebrateSets?: string[][]
 }
 
 export const CELEBRATE_FRAME_MS = 240
@@ -19,6 +20,36 @@ export function celebrateDurationMs(frameCount: number) {
   if (frameCount <= 0) return 900
   return frameCount * CELEBRATE_FRAME_MS + 280
 }
+
+export function celebrateSetsFor(character: Character): string[][] {
+  if (character.celebrateSets && character.celebrateSets.length > 0) {
+    return character.celebrateSets.filter((set) => set.length >= 4)
+  }
+  return character.celebrateFrames && character.celebrateFrames.length >= 4
+    ? [character.celebrateFrames]
+    : []
+}
+
+export function longestCelebrateFrames(character: Character) {
+  return celebrateSetsFor(character).reduce((longest, set) => Math.max(longest, set.length), 0)
+}
+
+export const JULIA_GLASSES_FRAMES = [
+  'julia-f1.png',
+  'julia-f2.png',
+  'julia-f3.png',
+  'julia-f4.png',
+  'julia-f5.png',
+  'julia-f6.png',
+]
+
+export const JULIA_PINKY_FRAMES = [
+  'julia-pinky-f1.png',
+  'julia-pinky-f2.png',
+  'julia-pinky-f1.png',
+  'julia-pinky-f3.png',
+  'julia-pinky-f1.png',
+]
 
 export const CHARACTERS: Character[] = [
   {
@@ -79,14 +110,8 @@ export const CHARACTERS: Character[] = [
     ink: '#1a1410',
     look: 'curl',
     portrait: 'julia.png',
-    celebrateFrames: [
-      'julia-f1.png',
-      'julia-f2.png',
-      'julia-f3.png',
-      'julia-f4.png',
-      'julia-f5.png',
-      'julia-f6.png',
-    ],
+    celebrateFrames: JULIA_GLASSES_FRAMES,
+    celebrateSets: [JULIA_GLASSES_FRAMES, JULIA_PINKY_FRAMES],
   },
 ]
 

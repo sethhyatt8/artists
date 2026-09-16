@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CharacterAvatar } from '../components/CharacterAvatar'
-import { CHARACTERS } from '../game/characters'
+import { CHARACTERS, JULIA_PINKY_FRAMES } from '../game/characters'
 
 const LABELS: Record<string, string> = {
   seth: 'gasp',
@@ -39,7 +39,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           </button>
         </div>
       </header>
-      <p className="lede">Play once. Replay to watch again. Julia’s extra card is one still, not in the game yet.</p>
+      <p className="lede">Play once. Replay to watch again. Julia’s pinky-up also shows up in the game as a second celebrate.</p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">
@@ -48,6 +48,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
               name={character.name}
               size={200}
               mood="surprise"
+              poseFrames={character.id === 'julia' ? character.celebrateFrames : undefined}
             />
             <figcaption>
               <strong>{character.name}</strong>
@@ -55,18 +56,17 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
             </figcaption>
           </figure>
         ))}
-        <figure className="celebration-card">
-          <img
-            className="character-avatar"
-            src={`${import.meta.env.BASE_URL}avatars/julia-pinky-f1.png`}
-            alt=""
-            width={200}
-            height={200}
-            style={{ width: 200, height: 200, borderRadius: 44 }}
+        <figure key={`julia-pinky-${play}`} className="celebration-card">
+          <CharacterAvatar
+            characterId="julia"
+            name="Julia"
+            size={200}
+            mood="surprise"
+            poseFrames={JULIA_PINKY_FRAMES}
           />
           <figcaption>
             <strong>Julia</strong>
-            <span>one hand (trial)</span>
+            <span>pinky-up</span>
           </figcaption>
         </figure>
       </div>

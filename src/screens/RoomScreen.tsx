@@ -94,10 +94,6 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
     send({ type: 'cue', kind: 'no-spelling' })
   }
 
-  function fireQuiet(seconds: 10 | 30) {
-    send({ type: 'mod', action: 'quiet', seconds })
-  }
-
   function fireClearGuesses() {
     send({ type: 'mod', action: 'clear-guesses' })
   }
@@ -263,8 +259,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           seconds={null}
           onLeave={leave}
           onCue={fireNoSpelling}
-          onQuiet={fireQuiet}
           onClearGuesses={fireClearGuesses}
+          onMutePlayer={fireMutePlayer}
           showCueButton={showCueButton}
         />
         <p className="lede">
@@ -303,8 +299,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           seconds={null}
           onLeave={leave}
           onCue={fireNoSpelling}
-          onQuiet={fireQuiet}
           onClearGuesses={fireClearGuesses}
+          onMutePlayer={fireMutePlayer}
           showCueButton={showCueButton}
         />
         <section className="panel">
@@ -329,8 +325,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
-          onQuiet={fireQuiet}
           onClearGuesses={fireClearGuesses}
+          onMutePlayer={fireMutePlayer}
           showCueButton={showCueButton}
         />
         <p className="hint">
@@ -378,8 +374,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={alreadyGotIt ? state.prompt : undefined}
           onCue={fireNoSpelling}
-          onQuiet={fireQuiet}
           onClearGuesses={fireClearGuesses}
+          onMutePlayer={fireMutePlayer}
           showCueButton={showCueButton}
         />
         <p className="hint">
@@ -471,8 +467,8 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
           onLeave={leave}
           prompt={state.prompt}
           onCue={fireNoSpelling}
-          onQuiet={fireQuiet}
           onClearGuesses={fireClearGuesses}
+          onMutePlayer={fireMutePlayer}
           showCueButton={showCueButton}
         />
         <p className="lede">{revealLede(state, winnerName)}</p>
@@ -694,8 +690,8 @@ function TurnHeader({
   onLeave,
   prompt,
   onCue,
-  onQuiet,
   onClearGuesses,
+  onMutePlayer,
   showCueButton,
 }: {
   state: RoomState
@@ -703,8 +699,8 @@ function TurnHeader({
   onLeave: () => void
   prompt?: string | null
   onCue: () => void
-  onQuiet: (seconds: 10 | 30) => void
   onClearGuesses: () => void
+  onMutePlayer: (playerId: string) => void
   showCueButton: boolean
 }) {
   return (
@@ -722,9 +718,13 @@ function TurnHeader({
           <LocalCues
             cue={state.cue}
             quietUntil={state.quietUntil}
+            mutedUntil={state.mutedUntil}
+            players={state.players}
+            selfId={state.selfId}
+            artistId={state.artistId}
             onCue={onCue}
-            onQuiet={onQuiet}
             onClearGuesses={onClearGuesses}
+            onMutePlayer={onMutePlayer}
             showButton={showCueButton}
           />
         ) : null}

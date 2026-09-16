@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { celebrateDurationMs, characterFor } from '../game/characters'
+import { celebrateDurationMs, characterFor, longestCelebrateFrames } from '../game/characters'
 import type { Guess, Player } from '../game/protocol'
 import { CharacterAvatar } from './CharacterAvatar'
 
@@ -49,7 +49,7 @@ export function GuessBurst({ guesses, players, turnKey }: GuessBurstProps) {
 
   useEffect(() => {
     if (!burst) return
-    const frames = characterFor(burst.characterId, burst.name).celebrateFrames?.length ?? 0
+    const frames = longestCelebrateFrames(characterFor(burst.characterId, burst.name))
     const timer = window.setTimeout(() => {
       setBurst(queue.current.shift() ?? null)
     }, celebrateDurationMs(frames))

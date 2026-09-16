@@ -596,6 +596,12 @@ assert(
   (CHARACTERS.find((character) => character.id === 'julia')?.celebrateFrames?.length ?? 0) >= 6,
   'Julia’s glasses should pulse across extra frames',
 )
+assert(
+  (CHARACTERS.find((character) => character.id === 'julia')?.celebrateSets?.some(
+    (set) => set.includes('julia-pinky-f1.png') && set.length >= 4,
+  ) ?? false),
+  'Julia should have a second celebrate set',
+)
 
 const champRoom = {
   ...emptyRoom(host, 'Ada', 'seth'),

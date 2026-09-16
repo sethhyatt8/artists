@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   CELEBRATE_FRAME_MS,
+  celebrateSetsFor,
   characterFor,
   type Character,
   type CharacterLook,
@@ -28,10 +29,21 @@ export function CharacterAvatar({
   const character = characterFor(characterId, name)
   const radius = Math.round(size * 0.22)
   const idleSrc = character.portrait ? portraitUrl(character.portrait) : null
-  const sourceFrames = poseFrames ?? character.celebrateFrames
+  const sets = poseFrames && poseFrames.length >= 4 ? [poseFrames] : celebrateSetsFor(character)
+  const [setIndex, setSetIndex] = useState(() =>
+    poseFrames ? 0 : Math.floor(Math.random() * Math.max(1, sets.length)),
+  )
   const celebrateFrames =
-    mood === 'surprise' && sourceFrames && sourceFrames.length >= 4 ? sourceFrames : null
+    mood === 'surprise' && sets.length > 0 ? sets[setIndex % sets.length] : null
   const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    if (poseFrames) {
+      setSetIndex(0)
+      return
+    }
+    setSetIndex(Math.floor(Math.random() * Math.max(1, sets.length)))
+  }, [character.id, mood, poseFrames, sets.length])
 
   useEffect(() => {
     if (!celebrateFrames?.length) {
