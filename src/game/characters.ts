@@ -43,15 +43,6 @@ export const JULIA_GLASSES_FRAMES = [
   'julia-f6.png',
 ]
 
-export const JULIA_PINKY_FRAMES = [
-  'julia-pinky-f1.png',
-  'julia-pinky-f2.png',
-  'julia-pinky-f3.png',
-  'julia-pinky-f2.png',
-  'julia-pinky-f3.png',
-  'julia-pinky-f1.png',
-]
-
 export const CHARACTERS: Character[] = [
   {
     id: 'seth',
@@ -112,7 +103,6 @@ export const CHARACTERS: Character[] = [
     look: 'curl',
     portrait: 'julia.png',
     celebrateFrames: JULIA_GLASSES_FRAMES,
-    celebrateSets: [JULIA_GLASSES_FRAMES, JULIA_PINKY_FRAMES],
   },
 ]
 

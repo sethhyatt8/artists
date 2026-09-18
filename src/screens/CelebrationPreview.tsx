@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CharacterAvatar } from '../components/CharacterAvatar'
-import { CHARACTERS, JULIA_PINKY_FRAMES } from '../game/characters'
+import { CHARACTERS } from '../game/characters'
 
 const LABELS: Record<string, string> = {
   seth: 'gasp',
@@ -39,10 +39,7 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           </button>
         </div>
       </header>
-      <p className="lede">
-        Play once. Replay to watch again. Julia’s pinky-up runs six frames: rest, left hand up,
-        right hand up, then that lift twice, then back to rest.
-      </p>
+      <p className="lede">Play once. Replay to watch again.</p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">
@@ -59,19 +56,6 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
             </figcaption>
           </figure>
         ))}
-        <figure key={`julia-pinky-${play}`} className="celebration-card">
-          <CharacterAvatar
-            characterId="julia"
-            name="Julia"
-            size={200}
-            mood="surprise"
-            poseFrames={JULIA_PINKY_FRAMES}
-          />
-          <figcaption>
-            <strong>Julia</strong>
-            <span>pinky-up</span>
-          </figcaption>
-        </figure>
       </div>
     </main>
   )

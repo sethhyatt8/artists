@@ -597,10 +597,10 @@ assert(
   'Julia’s glasses should pulse across extra frames',
 )
 assert(
-  (CHARACTERS.find((character) => character.id === 'julia')?.celebrateSets?.some(
-    (set) => set.includes('julia-pinky-f1.png') && set.length >= 6,
+  !(CHARACTERS.find((character) => character.id === 'julia')?.celebrateSets?.some((set) =>
+    set.some((frame) => frame.includes('pinky')),
   ) ?? false),
-  'Julia should have a six-frame pinky celebrate set',
+  'Julia pinky-up celebrate should stay retired',
 )
 
 const champRoom = {
