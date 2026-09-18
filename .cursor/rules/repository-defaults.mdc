@@ -25,7 +25,15 @@ alwaysApply: true
 - Use plan/discussion first when requests are broad or ambiguous.
 - After plan approval, execute end-to-end with minimal interruption.
 - Run lint and build checks after substantive changes.
+- After commits or deploys, always push to the remote (`git pull --rebase` first if the remote is ahead).
 - If blocked by missing external info (for example, repository URL), ask concise questions and continue immediately.
+
+## Keep this folder in sync (important)
+
+- GitHub is the source of truth. Cloud/other Cursor agents can push there without updating this laptop folder.
+- At the start of a session on an existing repo, always run `git fetch` and check `git status`. If the branch is behind, pull before searching or editing.
+- If the user says something is already live / on the site, check `origin/main` (and the live deploy) before concluding the feature is missing.
+- Prefer one active Cursor window per repo when possible.
 
 ## Safety
 

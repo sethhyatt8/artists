@@ -598,9 +598,9 @@ assert(
 )
 assert(
   (CHARACTERS.find((character) => character.id === 'julia')?.celebrateSets?.some(
-    (set) => set.includes('julia-pinky-f1.png') && set.length >= 4,
+    (set) => set.includes('julia-pinky-f1.png') && set.length >= 6,
   ) ?? false),
-  'Julia should have a second celebrate set',
+  'Julia should have a six-frame pinky celebrate set',
 )
 
 const champRoom = {

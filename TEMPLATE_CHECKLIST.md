@@ -25,6 +25,8 @@ Use this checklist each time you clone this repository for a new app.
 - Start broad requests in plan/discussion mode when requirements are ambiguous.
 - After plan approval, execute end-to-end with minimal interruption.
 - Ask concise questions only when blocked by missing external information.
+- Always pull from GitHub before continuing work if another Cursor window (or cloud agent) may have pushed. This laptop folder does not update by itself.
+- If the user says a feature is already live, check GitHub/`origin/main` first — do not trust only the local folder.
 
 ## 5) Quality gates for substantive changes
 

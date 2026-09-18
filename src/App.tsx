@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { syncModBoardFromUrl } from './game/modBoard'
 import { normalizeRoomCode } from './game/protocol'
 import { readTabSession, rememberTabRole } from './game/seats'
 import { CelebrationPreview } from './screens/CelebrationPreview'
@@ -28,6 +29,10 @@ export default function App() {
   const [celebrations, setCelebrations] = useState(
     () => readCelebrationsFromUrl() && !initialCode,
   )
+
+  useEffect(() => {
+    syncModBoardFromUrl()
+  }, [])
 
   useEffect(() => {
     const root = document.getElementById('root')

@@ -46,7 +46,8 @@ export const JULIA_GLASSES_FRAMES = [
 export const JULIA_PINKY_FRAMES = [
   'julia-pinky-f1.png',
   'julia-pinky-f2.png',
-  'julia-pinky-f1.png',
+  'julia-pinky-f3.png',
+  'julia-pinky-f2.png',
   'julia-pinky-f3.png',
   'julia-pinky-f1.png',
 ]

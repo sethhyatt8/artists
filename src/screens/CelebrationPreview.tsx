@@ -39,7 +39,10 @@ export function CelebrationPreview({ onLeave }: CelebrationPreviewProps) {
           </button>
         </div>
       </header>
-      <p className="lede">Play once. Replay to watch again. Julia’s pinky-up also shows up in the game as a second celebrate.</p>
+      <p className="lede">
+        Play once. Replay to watch again. Julia’s pinky-up runs six frames: rest, left hand up,
+        right hand up, then that lift twice, then back to rest.
+      </p>
       <div className="celebration-grid">
         {CHARACTERS.map((character) => (
           <figure key={`${character.id}-${play}`} className="celebration-card">

@@ -90,7 +90,7 @@ export function LocalCues({
     <>
       {showButton ? (
         <div className="local-cues">
-          <p className="local-cues-label">This computer</p>
+          <p className="local-cues-label">Mod · this computer</p>
           {onMutePlayer && muteTargets.length > 0 ? (
             <div className="local-cue-people">
               {muteTargets.map((player) => {
@@ -102,13 +102,14 @@ export function LocalCues({
                     type="button"
                     disabled={mutedLeft > 0}
                     onClick={() => onMutePlayer(player.id)}
+                    title={`Mute ${player.name} for 30 seconds`}
                   >
                     <CharacterAvatar
                       characterId={player.characterId}
                       name={player.name}
                       size={36}
                     />
-                    <span>{mutedLeft > 0 ? `${mutedLeft}s` : player.name}</span>
+                    <span>{mutedLeft > 0 ? `${mutedLeft}s` : `Mute ${player.name}`}</span>
                   </button>
                 )
               })}

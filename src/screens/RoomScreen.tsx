@@ -24,6 +24,7 @@ import { formatGuessMs, remainingLockSeconds, turnElapsedMs, turnRemainingSecond
 import { CharacterAvatar } from '../components/CharacterAvatar'
 import { GuessBurst } from '../components/GuessBurst'
 import { LocalCues } from '../components/LocalCues'
+import { isModBoardComputer } from '../game/modBoard'
 import { JOIN_BUILD } from '../game/seats'
 
 type RoomScreenProps = {
@@ -31,12 +32,7 @@ type RoomScreenProps = {
   onLeave: () => void
 }
 
-const CUE_BOARD_KEY = 'artists-cue-board'
 const USED_PROMPTS_KEY = 'artists-used-prompts'
-
-function cueBoardStorageKey(roomCode: string) {
-  return `${CUE_BOARD_KEY}:${roomCode}`
-}
 
 function readRememberedPrompts(): string[] {
   try {
@@ -56,15 +52,6 @@ function writeRememberedPrompts(prompts: string[]) {
   }
 }
 
-function isCueBoardComputer(session: RoomSession) {
-  if (session.intent === 'create') return true
-  try {
-    return localStorage.getItem(cueBoardStorageKey(session.roomCode)) === '1'
-  } catch {
-    return false
-  }
-}
-
 export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   const { state, error, status, send, disconnect } = useGameRoom(session)
   const [copied, setCopied] = useState(false)
@@ -76,7 +63,7 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
 
   const connectionId = state?.selfId ?? ''
   const isHost = session.intent === 'create'
-  const showCueButton = isCueBoardComputer(session)
+  const showCueButton = isModBoardComputer()
   const isArtist = Boolean(state && state.artistId === connectionId)
   const seconds = useTurnCountdown(state)
   const winnerName =
@@ -101,15 +88,6 @@ export function RoomScreen({ session, onLeave }: RoomScreenProps) {
   function fireMutePlayer(playerId: string) {
     send({ type: 'mod', action: 'mute-player', playerId, seconds: 30 })
   }
-
-  useEffect(() => {
-    if (session.intent !== 'create') return
-    try {
-      localStorage.setItem(cueBoardStorageKey(session.roomCode), '1')
-    } catch {
-      // Private browsing can block localStorage; the create-session still shows the button.
-    }
-  }, [session.intent, session.roomCode])
 
   useEffect(() => {
     if (!showCueButton || !state?.usedPrompts?.length) return
